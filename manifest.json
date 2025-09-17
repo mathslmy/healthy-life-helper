@@ -1,0 +1,10 @@
+{
+  "display_name": "健康生活助手",
+  "loading_order": 100,
+  "js": "index.js",
+  "css": "style.css",
+  "author": "宗",
+  "version": "0.1.0",
+  "auto_update": false,
+  "minimum_client_version": "1.0.0"
+}
