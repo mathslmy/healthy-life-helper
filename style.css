@@ -14,8 +14,7 @@
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   font-size: 22px;
   user-select: none;
-  background: #ffffff;
-  border: 1px solid #ddd;
+  background: transparent;
   color: #000; /* 按钮图标黑色 */
   transition: transform 0.2s;
 }
