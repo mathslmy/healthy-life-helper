@@ -35,6 +35,7 @@ import { saveSettingsDebounced } from "../../../../script.js";
           wishes: [],      // 心愿清单
           social: {},      // 社会化相关
           todo: [], // 待办事项
+          memo: [], // 备忘录
           apiConfig: {}    // 独立 API 配置
         };
         if (ctx.saveSettingsDebounced) ctx.saveSettingsDebounced();
@@ -68,6 +69,7 @@ import { saveSettingsDebounced } from "../../../../script.js";
           <div class="ha-btn" data-key="wishes">心愿清单</div>
           <div class="ha-btn" data-key="social">习惯养成</div>
           <div class="ha-btn" data-key="todo">待办事项</div>
+          <div class="ha-btn" data-key="memo">随笔备忘</div>
           <div class="ha-btn" data-key="apiconf">独立API</div>
           <div class="ha-btn" data-key="clearbook">清除数据</div>
         </div>
@@ -116,6 +118,7 @@ import { saveSettingsDebounced } from "../../../../script.js";
           else if (key === 'wishes') showWishes();
           else if (key === 'social') showSocial();
           else if (key === 'todo') showTodo();
+          else if (key === 'memo') showMemo();
           else if (key === 'clearbook') showClearBook();
           else if (key === 'apiconf') showApiConfig();
         });
@@ -266,7 +269,7 @@ document.getElementById('ha-sleep-help').addEventListener('click', async () => {
       body: JSON.stringify({  
         model: api.model,  
         messages: [{ role: 'system', content: '提供一些哄睡助眠措施帮user放下手机入眠。' }],  
-        max_tokens: 2000  
+        max_tokens: 5000  
       })  
     });  
     debugLog('助眠调用: HTTP 状态', res.status);  
@@ -340,7 +343,7 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
           { role: 'system', content: '你是健康顾问，请分析用户的睡眠记录并给出改善建议。' },  
           { role: 'user', content: targetContent }  
         ],  
-        max_tokens: 2000 
+        max_tokens: 5000 
       })  
     });  
     debugLog('分析调用: HTTP 状态', res.status);  
@@ -503,7 +506,7 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
             { role: 'system', content: '你是健康顾问，请根据用户饮食记录提供科学合理的饮食建议。' },
             { role: 'user', content: history || '用户未提供饮食记录' }
           ],
-          max_tokens: 2000
+          max_tokens: 5000
         })
       });
       debugLog('饮食建议调用: HTTP 状态', res.status);
@@ -529,18 +532,20 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
   renderLog();
 }
 
-     async function showMental() {
+   async function showMental() {
   content.style.display = 'block';
   content.innerHTML = `
     <div style="font-weight:600;margin-bottom:6px">心理健康</div>
     <button id="ha-emotion" class="ha-btn" style="width:100%;margin-bottom:6px">情绪记录</button>
     <div style="margin-bottom:6px">
-      <label style="display:block;font-size:12px;color:#666">正面冥想计时（分钟，0=即时指导）</label>
+      <label style="display:block;font-size:12px;color:#666">正念冥想计时（分钟，0=即时指导）</label>
       <input id="ha-meditation-min" type="range" min="0" max="30" step="5" value="5" style="width:200px"/>
       <span id="ha-meditation-val">5</span> 分钟
+      <span id="ha-medit-timer" style="margin-left:12px;color:#007acc;font-weight:600"></span>
       <button id="ha-start-medit" class="ha-btn" style="margin-left:8px">开始</button>
+      <button id="ha-stop-medit" class="ha-btn" style="margin-left:8px;display:none">结束</button>
     </div>
-    <div id="ha-mental-subpanel" 
+    <div id="ha-mental-subpanel"
          style="margin-top:6px;padding:6px;border:1px solid #ddd;background:#f9f9f9;white-space:pre-wrap;min-height:60px;max-height:200px;overflow:auto;display:block;">
     </div>
     <div id="ha-mental-log" class="ha-small"></div>
@@ -552,6 +557,13 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
   const subPanel = document.getElementById('ha-mental-subpanel');
   const slider = document.getElementById('ha-meditation-min');
   const sliderVal = document.getElementById('ha-meditation-val');
+  const timerEl = document.getElementById('ha-medit-timer');
+  const btnStart = document.getElementById('ha-start-medit');
+  const btnStop = document.getElementById('ha-stop-medit');
+
+  let timerId = null;
+  let startTime = null;
+  let targetDuration = 0; // 分钟
 
   slider.addEventListener('input', () => {
     sliderVal.innerText = slider.value;
@@ -625,6 +637,41 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
     }
   }
 
+  // === 新增：写入冥想条目 ===
+  async function appendToWorldInfoMeditationLog(durationMinutes) {
+    try {
+      const fileId = await findHealthWorldFile();
+      if (!fileId) return;
+
+      const moduleWI = await import('/scripts/world-info.js');
+      const worldInfo = await moduleWI.loadWorldInfo(fileId);
+      const entries = worldInfo.entries || {};
+
+      let targetUID = null;
+      for (const id in entries) {
+        const entry = entries[id];
+        const comment = entry.comment || '';
+        if (!entry.disable && (comment.includes('冥想') || entry.title === '冥想')) {
+          targetUID = entry.uid;
+          break;
+        }
+      }
+      if (!targetUID) return;
+
+      const recLine = `${new Date().toLocaleString()}：本次冥想 ${durationMinutes} 分钟`;
+      const existing = entries[targetUID].content || '';
+      const newContent = existing + (existing ? '\n' : '') + recLine;
+
+      await globalThis.SillyTavern.getContext()
+        .SlashCommandParser.commands['setentryfield']
+        .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+
+      debugLog('冥想记录写入成功:', recLine);
+    } catch (e) {
+      debugLog('冥想写入失败:', e.message || e);
+    }
+  }
+
   document.getElementById('ha-emotion').addEventListener('click', () => {
     const txt = prompt('记录当前情绪（例如：轻松 / 焦虑 / 愉快）：','');
     if (!txt) return;
@@ -636,11 +683,33 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
     appendToWorldInfoMentalLog(txt);
   });
 
-  document.getElementById('ha-start-medit').addEventListener('click', async () => {
+  // === 冥想开始 ===
+  btnStart.addEventListener('click', async () => {
     const mins = Number(slider.value);
-    subPanel.innerText = `正在准备正念指导（${mins} 分钟）...`;
-    subPanel.scrollTop = subPanel.scrollHeight;
+    targetDuration = mins;
+    startTime = new Date();
+    timerEl.innerText = ''; // 清空计时显示
+    btnStart.style.display = 'none';
+    btnStop.style.display = 'inline-block';
 
+    // 启动计时器
+    if (timerId) clearInterval(timerId);
+    timerId = setInterval(() => {
+      const elapsedSec = Math.floor((Date.now() - startTime.getTime()) / 1000);
+      if (mins === 0) {
+        timerEl.innerText = `已进行 ${Math.floor(elapsedSec / 60)}分${elapsedSec % 60}秒`;
+      } else {
+        const totalSec = mins * 60;
+        const remain = totalSec - elapsedSec;
+        if (remain >= 0) {
+          timerEl.innerText = `剩余 ${Math.floor(remain / 60)}分${remain % 60}秒`;
+        } else {
+          stopMeditation();
+        }
+      }
+    }, 1000);
+
+    // 保持原有 API 调用逻辑
     try {
       const api = ctx.extensionSettings[MODULE_NAME].apiConfig || {};
       if (!api.url) {
@@ -653,7 +722,7 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
       debugLog('正念指导调用: 请求将发送到', endpoint, 'model:', api.model);
 
       const history = ctx.extensionSettings[MODULE_NAME].mental.map(m => `${m.ts}：${m.text}`).join('\n');
-      const promptText = mins === 0 
+      const promptText = mins === 0
         ? `请根据以下用户情绪记录，立即给出一段简短正念指导和放松提示：\n${history || '无记录'}`
         : `请提供一段正念冥想指导，时长约 ${mins} 分钟，根据用户历史情绪记录：\n${history || '无记录'}`;
 
@@ -669,7 +738,7 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
             { role: 'system', content: '你是心理健康指导专家，为用户提供正念冥想与情绪缓解建议。' },
             { role: 'user', content: promptText }
           ],
-          max_tokens: 2000
+          max_tokens: 5000
         })
       });
 
@@ -687,6 +756,21 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
       debugLog('正念指导调用失败:', e.message || e);
     }
   });
+
+  // === 冥想结束 ===
+  function stopMeditation() {
+    if (!startTime) return;
+    const duration = Math.floor((Date.now() - startTime.getTime()) / 60000); // 实际分钟数
+    clearInterval(timerId);
+    timerId = null;
+    btnStart.style.display = 'inline-block';
+    btnStop.style.display = 'none';
+    timerEl.innerText = `本次冥想结束，共进行 ${duration} 分钟`;
+    appendToWorldInfoMeditationLog(duration);
+    startTime = null;
+  }
+
+  btnStop.addEventListener('click', stopMeditation);
 
   function renderLog() {
     const arr = ctx.extensionSettings[MODULE_NAME].mental || [];
@@ -826,7 +910,7 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
             { role: 'system', content: '你是健康运动顾问，请根据用户运动记录分析运动情况并给出科学建议。' },
             { role: 'user', content: promptText }
           ],
-          max_tokens: 2000
+          max_tokens: 5000
         })
       });
 
@@ -1020,7 +1104,7 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
       async function showSocial() {
   content.style.display = 'block';
   content.innerHTML = `
-    <div style="font-weight:600;margin-bottom:6px">社会化</div>
+    <div style="font-weight:600;margin-bottom:6px">习惯</div>
     <div style="display:flex;gap:8px;margin-bottom:6px">
       <button id="ha-social-config" class="ha-btn" style="flex:1">配置新习惯</button>
     </div>
@@ -1373,9 +1457,168 @@ async function showTodo() {
 
   render();
 }
+async function showMemo() {
+  if (!ctx.extensionSettings[MODULE_NAME].memo) ctx.extensionSettings[MODULE_NAME].memo = [];
+  const memos = ctx.extensionSettings[MODULE_NAME].memo;
+
+  content.innerHTML = `
+    <div style="font-weight:600;margin-bottom:6px">备忘录</div>
+    <div style="margin-bottom:6px;">
+      <textarea id="ha-memo-input" placeholder="输入备忘录..." 
+        style="width:70%; min-height:60px; padding:4px; resize:vertical"></textarea>
+      <button id="ha-memo-add" class="ha-btn" style="vertical-align:top; margin-left:6px;">添加 Memo</button>
+    </div>
+    <ul id="ha-memo-list" style="padding-left:18px; margin-top:6px;"></ul>
+    <div id="ha-memo-debug" style="margin-top:8px;padding:6px;border:1px solid #ddd;font-size:12px;max-height:160px;overflow:auto;background:#fafafa;white-space:pre-wrap"></div>
+  `;
+
+  const listEl = document.getElementById('ha-memo-list');
+  const debugEl = document.getElementById('ha-memo-debug');
+
+  function debugLog(...args) {
+    const ts = new Date().toLocaleTimeString();
+    const msg = `[${ts}] ` + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+    debugEl.innerText += msg + "\n";
+    debugEl.scrollTop = debugEl.scrollHeight;
+    console.log('[健康生活助手][Memo]', ...args);
+  }
+
+  async function findHealthWorldFile() {
+    try {
+      const moduleWI = await import('/scripts/world-info.js');
+      const selected = moduleWI.selected_world_info || [];
+      debugLog('selected_world_info:', selected);
+      for (const WI of selected) {
+        if (WI.includes('健康生活助手')) {
+          debugLog('匹配到世界书文件:', WI);
+          return WI;
+        }
+      }
+      debugLog('未找到名为 "健康生活助手" 的世界书文件');
+      return null;
+    } catch (e) {
+      debugLog('findHealthWorldFile 异常:', e.message || e);
+      return null;
+    }
+  }
+
+  async function appendToWorldInfoMemo() {
+    try {
+      const fileId = await findHealthWorldFile();
+      if (!fileId) { debugLog('写入世界书: 未找到世界书文件，跳过写入'); return; }
+
+      const moduleWI = await import('/scripts/world-info.js');
+      const worldInfo = await moduleWI.loadWorldInfo(fileId);
+      const entries = worldInfo.entries || {};
+      debugLog('loadWorldInfo entries count:', Object.keys(entries).length);
+
+      let targetUID = null;
+      for (const id in entries) {
+        const entry = entries[id];
+        const comment = entry.comment || '';
+        if (!entry.disable && (comment.includes('memo') || entry.title === 'memo')) {
+          targetUID = entry.uid;
+          debugLog('找到 memo entry: uid=', targetUID, 'comment=', comment);
+          break;
+        }
+      }
+
+      if (!targetUID) { debugLog('未找到 memo entry（未创建），写入被跳过。'); return; }
+
+      // 仅同步共享的 memo
+      const shared = memos.filter(m => m.shared);
+      const arr = shared.map((m, i) => `${i+1}. [${m.date}] ${m.text}`);
+      const newContent = arr.join('\n');
+
+      debugLog('准备写入 world entry:', { file: fileId, uid: targetUID });
+      await globalThis.SillyTavern.getContext()
+        .SlashCommandParser.commands['setentryfield']
+        .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+
+      debugLog('写入世界书成功，共享条目数:', arr.length);
+    } catch (e) {
+      debugLog('写入世界书失败:', e.message || e);
+    }
+  }
+
+  function render() {
+    listEl.innerHTML = '';
+    memos.forEach((m, i) => {
+      const li = document.createElement('li');
+      li.style.marginBottom = '6px';
+      li.style.display = 'flex';
+      li.style.alignItems = 'center';
+
+      // 共享选择放最前
+      const chkShare = document.createElement('input');
+      chkShare.type = 'checkbox';
+      chkShare.checked = m.shared || false;
+      chkShare.style.marginRight = '6px';
+      chkShare.addEventListener('change', () => {
+        m.shared = chkShare.checked;
+        saveSettings();
+        appendToWorldInfoMemo();
+      });
+      li.appendChild(chkShare);
+
+      const span = document.createElement('span');
+      span.style.flex = '1';
+      span.innerText = `${i+1}. [${m.date}] ${m.text}`;
+      li.appendChild(span);
+
+      // 编辑按钮
+      const btnEdit = document.createElement('button');
+      btnEdit.innerText = '编辑';
+      btnEdit.className = 'ha-btn';
+      btnEdit.style.marginLeft = '6px';
+      btnEdit.addEventListener('click', () => {
+        const newText = prompt('编辑 Memo 内容', m.text);
+        if (newText === null) return;
+        m.text = newText;
+        saveSettings();
+        render();
+        appendToWorldInfoMemo();
+      });
+      li.appendChild(btnEdit);
+
+      // 删除按钮
+      const btnDel = document.createElement('button');
+      btnDel.innerText = '删除';
+      btnDel.className = 'ha-btn';
+      btnDel.style.marginLeft = '4px';
+      btnDel.addEventListener('click', () => {
+        if (!confirm('确认删除该 Memo？')) return;
+        memos.splice(i, 1);
+        saveSettings();
+        render();
+        appendToWorldInfoMemo();
+      });
+      li.appendChild(btnDel);
+
+      listEl.appendChild(li);
+    });
+
+    appendToWorldInfoMemo();
+  }
+
+  // 添加 Memo
+  content.querySelector('#ha-memo-add').addEventListener('click', () => {
+    const input = content.querySelector('#ha-memo-input');
+    const val = input.value.trim();
+    if (!val) return;
+    const now = new Date();
+    const dateStr = now.toLocaleString();
+    memos.push({ text: val, date: dateStr, shared: false });
+    input.value = '';
+    saveSettings();
+    render();
+  });
+
+  render();
+}
 async function showClearBook() {
   content.innerHTML = `
-    <div style="display:flex; flex-direction:column; gap:6px;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
       <button id="ha-clear-sleep" class="ha-clear-btn">清除睡眠数据</button>
       <button id="ha-clear-diet" class="ha-clear-btn">清除饮食数据</button>
       <button id="ha-clear-mental" class="ha-clear-btn">清除心理数据</button>
@@ -1383,6 +1626,8 @@ async function showClearBook() {
       <button id="ha-clear-wishes" class="ha-clear-btn">清除心愿数据</button>
       <button id="ha-clear-social" class="ha-clear-btn">清除习惯数据</button>
       <button id="ha-clear-todo" class="ha-clear-btn">清除待办数据</button>
+      <button id="ha-clear-meditation" class="ha-clear-btn">清除冥想数据</button>
+      <button id="ha-clear-memo" class="ha-clear-btn">清除Memo数据</button>
       <button id="ha-clear-all" class="ha-clear-btn">全部清除</button>
     </div>
     <div id="ha-clear-debug" style="margin-top:8px;padding:6px;border:1px solid #ddd;font-size:12px;max-height:160px;overflow:auto;background:#fafafa;white-space:pre-wrap"></div>
@@ -1430,7 +1675,7 @@ async function showClearBook() {
       for(const id in entries){
         const entry = entries[id];
         const comment = entry.comment || '';
-        if(!entry.disable && (comment.includes(entryName) || entry.title === entryName)){
+        if(!entry.disable && (comment.toLowerCase().includes(entryName.toLowerCase()) || entry.title === entryName)){
           targetUID = entry.uid;
           debugLog('找到条目: uid=', targetUID, 'entryName=', entryName);
           break;
@@ -1498,6 +1743,20 @@ async function showClearBook() {
     alert('待办已清空');
   }
 
+  async function clearMeditation(){
+    ctx.extensionSettings[MODULE_NAME].meditation = [];
+    saveSettings();
+    await clearWorldEntry('冥想');
+    alert('冥想已清空');
+  }
+
+  async function clearMemo(){
+    ctx.extensionSettings[MODULE_NAME].memo = [];
+    saveSettings();
+    await clearWorldEntry('memo');
+    alert('Memo已清空');
+  }
+
   async function clearAll(){
     await clearSleep();
     await clearDiet();
@@ -1506,6 +1765,8 @@ async function showClearBook() {
     await clearWishes();
     await clearSocial();
     await clearTodo();
+    await clearMeditation();
+    await clearMemo();
     ctx.extensionSettings[MODULE_NAME].apiConfig = {};
     saveSettings();
     alert('全部已清空');
@@ -1518,6 +1779,8 @@ async function showClearBook() {
   document.getElementById('ha-clear-wishes').addEventListener('click', clearWishes);
   document.getElementById('ha-clear-social').addEventListener('click', clearSocial);
   document.getElementById('ha-clear-todo').addEventListener('click', clearTodo);
+  document.getElementById('ha-clear-meditation').addEventListener('click', clearMeditation);
+  document.getElementById('ha-clear-memo').addEventListener('click', clearMemo);
   document.getElementById('ha-clear-all').addEventListener('click', clearAll);
 }
       // ------------- 完整独立 API 配置模块（集成参考代码） -------------
