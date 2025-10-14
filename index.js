@@ -45,10 +45,141 @@ import { saveSettingsDebounced } from "../../../../script.js";
       if (document.getElementById('health-assistant-fab')) return; // 防重复
 
       const fab = document.createElement('div');
-      fab.id = 'health-assistant-fab';
-      fab.title = '健康生活助手';
-      fab.innerText = '🍀';
-      document.body.appendChild(fab);
+fab.id = 'health-assistant-fab';
+fab.title = '健康生活助手';
+fab.innerText = '🍀';
+document.body.appendChild(fab);
+
+
+
+// 拖动逻辑（适配手机端）
+function enableDrag(element) {
+  let isDragging = false;
+  let currentX;
+  let currentY;
+  let initialX;
+  let initialY;
+  let xOffset = 0;
+  let yOffset = 0;
+
+  // 恢复保存的位置
+  const savedPosition = localStorage.getItem('health-assistant-fab-position');
+  if (savedPosition) {
+    const { x, y } = JSON.parse(savedPosition);
+    element.style.left = `${x}px`;
+    element.style.top = `${y}px`;
+    element.style.right = 'auto';
+    element.style.bottom = 'auto';
+  }
+
+  function dragStart(e) {
+    if (e.type === "touchstart") {
+      initialX = e.touches[0].clientX - xOffset;
+      initialY = e.touches[0].clientY - yOffset;
+    } else {
+      initialX = e.clientX - xOffset;
+      initialY = e.clientY - yOffset;
+    }
+
+    if (e.target === element) {
+      isDragging = true;
+      element.style.cursor = 'grabbing';
+    }
+  }
+
+  function dragEnd(e) {
+    if (!isDragging) return;
+    
+    initialX = currentX;
+    initialY = currentY;
+    isDragging = false;
+    element.style.cursor = 'grab';
+
+    // 保存位置
+    const rect = element.getBoundingClientRect();
+    localStorage.setItem('health-assistant-fab-position', JSON.stringify({
+      x: rect.left,
+      y: rect.top
+    }));
+  }
+
+  function drag(e) {
+    if (!isDragging) return;
+
+    e.preventDefault();
+
+    if (e.type === "touchmove") {
+      currentX = e.touches[0].clientX - initialX;
+      currentY = e.touches[0].clientY - initialY;
+    } else {
+      currentX = e.clientX - initialX;
+      currentY = e.clientY - initialY;
+    }
+
+    xOffset = currentX;
+    yOffset = currentY;
+
+    // 计算新位置
+    let newLeft = currentX;
+    let newTop = currentY;
+
+    // 获取窗口尺寸和元素尺寸
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+    const elementWidth = element.offsetWidth;
+    const elementHeight = element.offsetHeight;
+
+    // 限制在窗口内
+    newLeft = Math.max(0, Math.min(newLeft, windowWidth - elementWidth));
+    newTop = Math.max(0, Math.min(newTop, windowHeight - elementHeight));
+
+    // 设置位置
+    element.style.left = `${newLeft}px`;
+    element.style.top = `${newTop}px`;
+    element.style.right = 'auto';
+    element.style.bottom = 'auto';
+    element.style.transform = "translate(0, 0)";
+  }
+
+  // 鼠标事件
+  element.addEventListener('mousedown', dragStart);
+  document.addEventListener('mousemove', drag);
+  document.addEventListener('mouseup', dragEnd);
+
+  // 触摸事件
+  element.addEventListener('touchstart', dragStart, { passive: false });
+  document.addEventListener('touchmove', drag, { passive: false });
+  document.addEventListener('touchend', dragEnd);
+
+  // 防止点击时触发拖动
+  element.addEventListener('click', (e) => {
+    if (xOffset !== 0 || yOffset !== 0) {
+      e.stopPropagation();
+      xOffset = 0;
+      yOffset = 0;
+    }
+  });
+
+  // 窗口大小改变时，确保按钮在可视区域内
+  window.addEventListener('resize', () => {
+    const rect = element.getBoundingClientRect();
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+    
+    let newLeft = rect.left;
+    let newTop = rect.top;
+    
+    // 调整位置确保在窗口内
+    newLeft = Math.max(0, Math.min(newLeft, windowWidth - element.offsetWidth));
+    newTop = Math.max(0, Math.min(newTop, windowHeight - element.offsetHeight));
+    
+    element.style.left = `${newLeft}px`;
+    element.style.top = `${newTop}px`;
+  });
+}
+
+// 启用拖动
+enableDrag(fab);
 
       const panel = document.createElement('div');
       panel.id = 'health-assistant-panel';
@@ -1274,24 +1405,30 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
   render();
 }
 async function showTodo() {
+  try { 
+    const cs = window.getComputedStyle(content);
+    if (cs.position === 'static' || !cs.position) content.style.position = 'relative';
+  } catch (e) {}
+
   content.style.display = 'block';
   content.innerHTML = `
     <div style="font-weight:600;margin-bottom:6px">待办事项</div>
     <div style="margin-bottom:6px;">
-      <button id="ha-todo-sort-date" class="ha-btn" style="margin-right:4px">按截止日期排序</button>
+      <button id="ha-todo-sort-date" class="ha-btn" style="margin-right:4px">按ddl排序</button>
       <button id="ha-todo-sort-priority" class="ha-btn">按优先级排序</button>
+      <button id="ha-todo-calendar" class="ha-btn" style="margin-left:4px">日历</button>
       <button id="ha-todo-add-btn" class="ha-btn" style="margin-left:8px">添加待办</button>
     </div>
     <div id="ha-todo-list" class="ha-small" style="margin-bottom:6px;"></div>
     <div id="ha-todo-subpanel" 
          style="margin-top:6px;padding:6px;border:1px solid #ddd;background:#f9f9f9;white-space:pre-wrap;min-height:60px;max-height:200px;overflow:auto;display:block;">
     </div>
-    <div id="ha-todo-debug" style="margin-top:8px;padding:6px;border:1px solid #ddd;font-size:12px;max-height:160px;overflow:auto;background:#fafafa;white-space:pre-wrap"></div>
+    
   `;
 
   const listEl = document.getElementById('ha-todo-list');
-  const subPanel = document.getElementById('ha-todo-subpanel');
   const debugEl = document.getElementById('ha-todo-debug');
+  const btnCalendar = document.getElementById('ha-todo-calendar');
 
   function debugLog(...args) {
     const ts = new Date().toLocaleTimeString();
@@ -1308,61 +1445,39 @@ async function showTodo() {
     try {
       const moduleWI = await import('/scripts/world-info.js');
       const selected = moduleWI.selected_world_info || [];
-      debugLog('selected_world_info:', selected);
       for (const WI of selected) {
-        if (WI.includes('健康生活助手')) {
-          debugLog('匹配到世界书文件:', WI);
-          return WI;
-        }
+        if (WI.includes('健康生活助手')) return WI;
       }
-      debugLog('未找到名为 "健康生活助手" 的世界书文件');
       return null;
-    } catch (e) {
-      debugLog('findHealthWorldFile 异常:', e.message || e);
-      return null;
-    }
+    } catch { return null; }
   }
 
   async function appendToWorldInfoTodoLog() {
     try {
       const fileId = await findHealthWorldFile();
-      if (!fileId) { debugLog('写入世界书: 未找到世界书文件，跳过写入'); return; }
-
+      if (!fileId) return;
       const moduleWI = await import('/scripts/world-info.js');
       const worldInfo = await moduleWI.loadWorldInfo(fileId);
       const entries = worldInfo.entries || {};
-      debugLog('loadWorldInfo entries count:', Object.keys(entries).length);
-
       let targetUID = null;
       for (const id in entries) {
         const entry = entries[id];
         const comment = entry.comment || '';
         if (!entry.disable && (comment.includes('待办') || entry.title === '待办')) {
           targetUID = entry.uid;
-          debugLog('找到待办 entry: uid=', targetUID, 'comment=', comment);
           break;
         }
       }
-
-      if (!targetUID) {
-        debugLog('未找到待办 entry（未创建），写入被跳过。');
-        return;
-      }
-
+      if (!targetUID) return;
       const arr = todos.map((t,i)=>{
         const due = t.due ? `截止:${t.due}` : '';
-        const status = t.done ? '完成' : (new Date() > new Date(t.due) ? '过期' : '进行中');
+        const status = t.done ? '完成' : (t.due && new Date() > new Date(t.due) ? '过期' : '进行中');
         return `${i+1}. [${status}] ${t.name} 优先:${t.priority} 标签:${t.tag} ${due}`;
       });
-
       const newContent = arr.join('\n');
-
-      debugLog('准备写入 world entry:', { file: fileId, uid: targetUID });
       await globalThis.SillyTavern.getContext()
         .SlashCommandParser.commands['setentryfield']
         .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
-
-      debugLog('写入世界书成功，当前待办条目行数:', arr.length);
     } catch (e) {
       debugLog('写入世界书失败:', e.message || e);
     }
@@ -1371,22 +1486,25 @@ async function showTodo() {
   function render(sortMode='date') {
     let arr = [...todos];
     if (sortMode === 'date') {
-      arr.sort((a,b)=>new Date(a.due||0)-new Date(b.due||0));
+      arr.sort((a,b)=>{
+        const da = a.due ? new Date(a.due) : new Date(0);
+        const db = b.due ? new Date(b.due) : new Date(0);
+        return da - db;
+      });
     } else if (sortMode === 'priority') {
       arr.sort((a,b)=>b.priority-a.priority);
     }
-
     listEl.innerHTML = '';
     arr.forEach((t,i)=>{
       const div = document.createElement('div');
       div.style.display = 'flex';
       div.style.alignItems = 'center';
       div.style.marginBottom = '4px';
-
-      const status = t.done ? '完成' : (new Date() > new Date(t.due) ? '过期' : '进行中');
+      const status = t.done ? '完成' : (t.due && new Date() > new Date(t.due) ? '过期' : '进行中');
       const dueText = t.due ? `截止:${t.due}` : '';
       const textSpan = document.createElement('span');
       textSpan.style.flex = '1';
+      textSpan.style.wordBreak = 'break-word';
       textSpan.innerText = `${i+1}. [${status}] ${t.name} 优先:${t.priority} 标签:${t.tag} ${dueText}`;
       div.appendChild(textSpan);
 
@@ -1394,66 +1512,254 @@ async function showTodo() {
       btnDone.innerText = '完成';
       btnDone.className = 'ha-btn';
       btnDone.style.marginLeft = '4px';
-      btnDone.addEventListener('click', ()=>{
-        t.done = true;
-        saveSettings();
-        render(sortMode);
-        appendToWorldInfoTodoLog();
-      });
+      btnDone.onclick = ()=>{t.done=true;saveSettings();render(sortMode);appendToWorldInfoTodoLog();};
       div.appendChild(btnDone);
 
       const btnEdit = document.createElement('button');
       btnEdit.innerText = '编辑';
       btnEdit.className = 'ha-btn';
       btnEdit.style.marginLeft = '4px';
-      btnEdit.addEventListener('click', ()=>{
-        const name = prompt('待办名称', t.name);
-        if (name===null) return;
-        const due = prompt('截止日期时间 (YYYY-MM-DD HH:MM)', t.due || '');
-        if (due===null) return;
-        const priority = parseInt(prompt('优先级 (1-5)', t.priority||3));
-        if (isNaN(priority)) return;
-        const tag = prompt('标签', t.tag||'');
-        t.name=name; t.due=due; t.priority=priority; t.tag=tag;
-        saveSettings();
-        render(sortMode);
-        appendToWorldInfoTodoLog();
-      });
+      btnEdit.onclick = ()=>openTodoDialog(t,sortMode);
       div.appendChild(btnEdit);
 
       const btnDel = document.createElement('button');
       btnDel.innerText = '删除';
       btnDel.className = 'ha-btn';
       btnDel.style.marginLeft = '4px';
-      btnDel.addEventListener('click', ()=>{
+      btnDel.onclick = ()=>{
         if (!confirm('确认删除该待办？')) return;
         todos.splice(todos.indexOf(t),1);
-        saveSettings();
-        render(sortMode);
-        appendToWorldInfoTodoLog();
-      });
+        saveSettings();render(sortMode);appendToWorldInfoTodoLog();
+      };
       div.appendChild(btnDel);
-
       listEl.appendChild(div);
     });
-
     appendToWorldInfoTodoLog();
   }
 
-  document.getElementById('ha-todo-add-btn').addEventListener('click', ()=>{
-    const name = prompt('待办名称','');
-    if (!name) return;
-    const due = prompt('截止日期时间 (YYYY-MM-DD HH:MM)','');
-    const priority = parseInt(prompt('优先级 (1-5)','3')) || 3;
-    const tag = prompt('标签','');
-    const id = 'todo_' + Date.now();
-    todos.push({ id, name, due, priority, tag, done:false });
-    saveSettings();
-    render();
-  });
+  function openTodoDialog(t,sortMode) {
+    const dialog = document.createElement('div');
+    const isNew = !t;
+    const todo = t || {name:'',due:'',priority:3,tag:''};
+    const dueDate = todo.due ? (todo.due.split('T')[0]||'') : '';
+    const dueTime = todo.due ? (todo.due.split('T')[1]||'') : '';
+    dialog.innerHTML = `
+      <div style="background:#fff;padding:8px;border-radius:6px;box-shadow:0 1px 6px rgba(0,0,0,0.12);max-width:320px;margin:auto;">
+        <div style="font-weight:600;margin-bottom:0px;">${isNew?'添加':'编辑'}待办</div>
+        <label style="font-size:13px">名称：</label><br>
+        <input id="todo-name" type="text" style="width:100%;margin-bottom:0px;padding:0px;" value="${escapeHtml(todo.name)}"><br>
+        <label style="font-size:13px">截止日期：</label><br>
+        <input id="todo-date" type="date" style="width:100%;margin-bottom:0px;padding:0px;"><br>
+        <label style="font-size:13px">截止时间：</label><br>
+        <input id="todo-time" type="time" style="width:100%;margin-bottom:0px;padding:0px;"><br>
+        <label style="font-size:13px">优先级：</label><br>
+        <input id="todo-priority" type="number" min="1" max="5" value="${todo.priority}" style="width:100%;margin-bottom:0px;padding:0px;"><br>
+        <label style="font-size:13px">标签：</label><br>
+        <input id="todo-tag" type="text" style="width:100%;margin-bottom:0px;padding:0px;" value="${escapeHtml(todo.tag)}"><br>
+        <div style="text-align:right;">
+          <button id="todo-ok" class="ha-btn">确定</button>
+          <button id="todo-cancel" class="ha-btn" style="margin-left:6px;">取消</button>
+        </div>
+      </div>`;
+    Object.assign(dialog.style,{position:'absolute',top:'8px',left:'8px',right:'8px',display:'flex',alignItems:'center',justifyContent:'center',zIndex:99999});
+    content.appendChild(dialog);
+    dialog.querySelector('#todo-date').value=dueDate;
+    dialog.querySelector('#todo-time').value=dueTime;
+    dialog.querySelector('#todo-cancel').onclick=()=>dialog.remove();
+    dialog.querySelector('#todo-ok').onclick=()=>{
+      const name=dialog.querySelector('#todo-name').value.trim();
+      if(!name)return alert('名称不能为空');
+      const date=dialog.querySelector('#todo-date').value;
+      const time=dialog.querySelector('#todo-time').value;
+      const due=date?(time?`${date}T${time}`:date):'';
+      const priority=parseInt(dialog.querySelector('#todo-priority').value)||3;
+      const tag=dialog.querySelector('#todo-tag').value.trim();
+      if(isNew){
+        const id='todo_'+Date.now();
+        todos.push({id,name,due,priority,tag,done:false});
+      }else{
+        t.name=name;t.due=due;t.priority=priority;t.tag=tag;
+      }
+      saveSettings();render(sortMode);appendToWorldInfoTodoLog();dialog.remove();
+    };
+  }
 
-  document.getElementById('ha-todo-sort-date').addEventListener('click', ()=>render('date'));
-  document.getElementById('ha-todo-sort-priority').addEventListener('click', ()=>render('priority'));
+  document.getElementById('ha-todo-add-btn').onclick=()=>openTodoDialog(null,'date');
+  document.getElementById('ha-todo-sort-date').onclick=()=>render('date');
+  document.getElementById('ha-todo-sort-priority').onclick=()=>render('priority');
+
+ // ==== 新版 日历面板 ====
+  btnCalendar.addEventListener('click', ()=>{
+    const dialog=document.createElement('div');
+    dialog.innerHTML=`
+      <div style="background:#fff;padding:10px;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,0.2);max-width:800px;width:95%;margin:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div>
+            <button id="cal-day" class="ha-btn" style="margin-right:4px;">当日</button>
+            <button id="cal-week" class="ha-btn" style="margin-right:4px;">7天</button>
+            <button id="cal-month" class="ha-btn">当月</button>
+          </div>
+          <button id="cal-close" class="ha-btn" style="font-size:12px;">关闭</button>
+        </div>
+        <div id="cal-panel" style="max-height:480px;overflow:auto;font-size:13px;white-space:pre-wrap;border-top:1px solid #ddd;padding-top:6px;"></div>
+      </div>`;
+    Object.assign(dialog.style,{position:'absolute',top:'6px',left:'4px',right:'4px',display:'flex',alignItems:'flex-start',justifyContent:'center',zIndex:99999});
+    content.appendChild(dialog);
+    const panel=dialog.querySelector('#cal-panel');
+
+    function renderDay(){
+      const now=new Date();
+      const dateStr=now.toISOString().split('T')[0];
+      let text=`📅 ${dateStr} 当日任务\n\n`;
+      const start=new Date(dateStr+'T00:00');
+      for(let h=0;h<24;h+=2){
+        const slotStart=new Date(start.getTime()+h*3600*1000);
+        const slotEnd=new Date(start.getTime()+(h+2)*3600*1000);
+        const slotTasks=todos.filter(t=>t.due && new Date(t.due)>=slotStart && new Date(t.due)<slotEnd);
+        const timeLabel=slotStart.toTimeString().slice(0,5)+' - '+slotEnd.toTimeString().slice(0,5);
+        if(slotTasks.length){
+          text+=`⏰ ${timeLabel}\n`;
+          slotTasks.forEach(tt=>{
+            const status=tt.done?'✅':'🔸';
+            text+=`  ${status} ${tt.name} (优先:${tt.priority})\n`;
+          });
+        }
+      }
+      panel.innerText=text || '今日暂无任务。';
+    }
+
+    function renderWeek(){
+      const now=new Date();
+      const todayStr=now.toISOString().split('T')[0];
+      let text=`📅 ${todayStr} 起未来7天任务\n\n`;
+      for(let i=0;i<7;i++){
+        const d=new Date(now.getTime()+i*86400000);
+        const dayStr=d.toISOString().split('T')[0];
+        const dayTasks=todos.filter(t=>t.due && t.due.startsWith(dayStr));
+        if(dayTasks.length){
+          text+=`📆 ${dayStr}\n`;
+          dayTasks.forEach(tt=>{
+            const status=tt.done?'✅':'🔸';
+            text+=`  ${status} ${tt.name} (优先:${tt.priority})\n`;
+          });
+          text+='\n';
+        }
+      }
+      panel.innerText=text || '未来7天暂无任务。';
+    }
+
+  function renderMonth() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-based
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startWeekday = firstDay.getDay();
+  const totalDays = lastDay.getDate();
+
+  // 🔧 清理 panel 样式，消除默认间距
+  panel.style.padding = '0';
+  panel.style.margin = '0';
+  panel.style.lineHeight = '1';
+  panel.style.fontSize = '0';
+  panel.style.overflow = 'hidden';
+
+  // 📅 标题
+  let gridHTML = `<div style="text-align:center;font-weight:600;margin:0 0 2px 0;padding:0;line-height:1;font-size:13px;">📅 ${year}年${month + 1}月</div>`;
+
+  // 星期行
+  gridHTML += `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:0;margin:0 0 2px 0;padding:0;font-weight:600;font-size:12px;">` +
+    `<div style="display:flex;align-items:center;justify-content:center;height:28px;">日</div>` +
+    `<div style="display:flex;align-items:center;justify-content:center;height:28px;">一</div>` +
+    `<div style="display:flex;align-items:center;justify-content:center;height:28px;">二</div>` +
+    `<div style="display:flex;align-items:center;justify-content:center;height:28px;">三</div>` +
+    `<div style="display:flex;align-items:center;justify-content:center;height:28px;">四</div>` +
+    `<div style="display:flex;align-items:center;justify-content:center;height:28px;">五</div>` +
+    `<div style="display:flex;align-items:center;justify-content:center;height:28px;">六</div>` +
+    `</div>`;
+
+  // 日期格子
+  gridHTML += `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:11px;line-height:1;grid-auto-rows:28px;margin-top:0;">`;
+
+  // 填充空白
+  for (let i = 0; i < startWeekday; i++) gridHTML += `<div></div>`;
+
+  // 日期格子内容
+  for (let day = 1; day <= totalDays; day++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const dayTasks = todos.filter(t => t.due && t.due.startsWith(dateStr));
+    const hasTasks = dayTasks.length > 0;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isToday = dateStr === todayStr;
+    const bg = hasTasks ? 'rgba(144,238,144,0.4)' : isToday ? 'rgba(0,128,255,0.1)' : '#f8f8f8';
+    const border = '1px solid #ccc';
+    const color = hasTasks ? '#000' : '#999';
+
+    let inner = `<div style="font-weight:600;font-size:11px;margin-bottom:1px;">${day}</div>`;
+    inner += hasTasks
+      ? `<div style="font-size:12px;font-weight:600;">${dayTasks.length}</div>`
+      : `<div style="color:#bbb;">无</div>`;
+
+    gridHTML += `<div class="cal-cell" data-date="${dateStr}" 
+      style="background:${bg};border:${border};
+             border-radius:3px;padding:1px 0;
+             cursor:pointer;color:${color};
+             display:flex;flex-direction:column;
+             align-items:center;justify-content:center;
+             min-height:28px;line-height:1.2;">${inner}</div>`;
+  }
+
+  gridHTML += `</div>`;
+  panel.innerHTML = gridHTML;
+
+  // 点击事件保持原有逻辑
+  panel.querySelectorAll('.cal-cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+      const d = cell.dataset.date;
+      const dayTasks = todos.filter(t => t.due && t.due.startsWith(d));
+      const popup = document.createElement('div');
+      popup.innerHTML = `
+        <div style="background:#fff;border:1px solid #ccc;border-radius:6px;
+                    padding:8px;box-shadow:0 2px 8px rgba(0,0,0,0.2);max-width:320px;">
+          <div style="font-weight:600;margin-bottom:4px;">📅 ${d} 的任务</div>
+          <div style="max-height:240px;overflow:auto;font-size:13px;">
+            ${
+              dayTasks.length
+                ? dayTasks.map(t => {
+                    const status = t.done ? '✅' : '🔸';
+                    const dueTime = (t.due.split('T')[1] || '').slice(0,5);
+                    return `<div>${status}${escapeHtml(t.name)} ${dueTime ? `(${dueTime})` : ''}</div>`;
+                  }).join('')
+                : '<div>暂无任务。</div>'
+            }
+          </div>
+          <div style="text-align:right;margin-top:6px;">
+            <button class="ha-btn cal-close-mini" style="font-size:12px;">关闭</button>
+          </div>
+        </div>`;
+      Object.assign(popup.style, {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        zIndex: 100000,
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+      });
+      content.appendChild(popup);
+      popup.querySelector('.cal-close-mini').onclick = () => popup.remove();
+    });
+  });
+}
+    dialog.querySelector('#cal-day').onclick=renderDay;
+    dialog.querySelector('#cal-week').onclick=renderWeek;
+    dialog.querySelector('#cal-month').onclick=renderMonth;
+    dialog.querySelector('#cal-close').onclick=()=>dialog.remove();
+
+    renderDay(); // 默认显示当天
+  });
+  function escapeHtml(str){return str?String(str).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])):'';}
 
   render();
 }
@@ -1465,7 +1771,7 @@ async function showMemo() {
     <div style="font-weight:600;margin-bottom:6px">备忘录</div>
     <div style="margin-bottom:6px;">
       <textarea id="ha-memo-input" placeholder="输入备忘录..." 
-        style="width:70%; min-height:60px; padding:4px; resize:vertical"></textarea>
+        style="width:100%; min-height:60px; padding:4px; resize:vertical"></textarea>
       <button id="ha-memo-add" class="ha-btn" style="vertical-align:top; margin-left:6px;">添加 Memo</button>
     </div>
     <ul id="ha-memo-list" style="padding-left:18px; margin-top:6px;"></ul>
