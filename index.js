@@ -35,7 +35,8 @@ import { saveSettingsDebounced } from "../../../../script.js";
           wishes: [],      // 心愿清单
           social: {},      // 社会化相关
           todo: [], // 待办事项
-          memo: [], // 备忘录
+          memo: [],
+          bgmTags: [], // 备忘录
           apiConfig: {}    // 独立 API 配置
         };
         if (ctx.saveSettingsDebounced) ctx.saveSettingsDebounced();
@@ -201,6 +202,7 @@ enableDrag(fab);
           <div class="ha-btn" data-key="social">习惯养成</div>
           <div class="ha-btn" data-key="todo">待办事项</div>
           <div class="ha-btn" data-key="memo">随笔备忘</div>
+          <div class="ha-btn" data-key="bgm">背景音乐</div>
           <div class="ha-btn" data-key="apiconf">独立API</div>
           <div class="ha-btn" data-key="clearbook">清除数据</div>
         </div>
@@ -250,6 +252,7 @@ enableDrag(fab);
           else if (key === 'social') showSocial();
           else if (key === 'todo') showTodo();
           else if (key === 'memo') showMemo();
+          else if (key === 'bgm') showBgm();
           else if (key === 'clearbook') showClearBook();
           else if (key === 'apiconf') showApiConfig();
         });
@@ -670,7 +673,7 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
     <button id="ha-emotion" class="ha-btn" style="width:100%;margin-bottom:6px">情绪记录</button>
     <div style="margin-bottom:6px">
       <label style="display:block;font-size:12px;color:#666">正念冥想计时（分钟，0=即时指导）</label>
-      <input id="ha-meditation-min" type="range" min="0" max="30" step="5" value="5" style="width:200px"/>
+      <input id="ha-meditation-min" type="range" min="0" max="30" step="5" value="5" style="width:150px"/>
       <span id="ha-meditation-val">5</span> 分钟
       <span id="ha-medit-timer" style="margin-left:12px;color:#007acc;font-weight:600"></span>
       <button id="ha-start-medit" class="ha-btn" style="margin-left:8px">开始</button>
@@ -1922,6 +1925,728 @@ async function showMemo() {
 
   render();
 }
+async function showBgm() {
+  const container = content;
+  container.style.display = 'block';
+  container.innerHTML = `
+    <div style="font-weight:600;margin-bottom:6px">🎵 背景音乐</div>
+
+    <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px">
+      <input id="ha-bgm-tag-input" type="text" placeholder="标签名" style="flex:1;padding:4px;border:1px solid #ccc;border-radius:4px;">
+      <button id="ha-bgm-add" class="ha-btn">➕</button>
+      <button id="ha-bgm-del" class="ha-btn">🗑️</button>
+      <button id="ha-bgm-star" class="ha-btn">⭐</button>
+    </div>
+
+    <div id="ha-bgm-tags" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;"></div>
+
+    <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px">
+      <input id="ha-bgm-search" type="text" placeholder="搜索歌名/歌手" style="flex:1;padding:4px;border:1px solid #ccc;border-radius:4px;">
+      <input id="ha-bgm-limit" type="number" min="1" value="10" title="返回条数" style="width:60px;padding:4px;border:1px solid #ccc;border-radius:4px;">
+      <button id="ha-bgm-query" class="ha-btn">🔎</button>
+    </div>
+
+    <div id="ha-bgm-list" style="border:1px solid #ddd;padding:6px;border-radius:6px;background:#fafafa;min-height:80px;max-height:300px;overflow:auto;white-space:pre-wrap;"></div>
+  `;
+
+  const tagInput = document.getElementById('ha-bgm-tag-input');
+  const tagArea = document.getElementById('ha-bgm-tags');
+  const listArea = document.getElementById('ha-bgm-list');
+  const addBtn = document.getElementById('ha-bgm-add');
+  const delBtn = document.getElementById('ha-bgm-del');
+  const starBtn = document.getElementById('ha-bgm-star');
+  const searchBtn = document.getElementById('ha-bgm-query');
+  const searchInput = document.getElementById('ha-bgm-search');
+  const limitInput = document.getElementById('ha-bgm-limit');
+  const debug = (...args) => console.log('[BGM]', ...args);
+  const state = { deleteMode: false };
+  const tags = ctx.extensionSettings[MODULE_NAME].bgmTags || [];
+  // 初始化 limitInput 值
+const savedLimit = ctx.extensionSettings[MODULE_NAME].bgmLimit || 10;
+limitInput.value = savedLimit;
+
+// 监听用户修改 limitInput
+limitInput.onchange = () => {
+  const val = parseInt(limitInput.value) || 10;
+  ctx.extensionSettings[MODULE_NAME].bgmLimit = val;
+  saveSettings();
+};
+
+  function toaster(msg, type = 'info') {
+    window.toastr?.[type] ? toastr[type](msg) : alert(msg);
+  }
+
+  function saveTags() {
+    ctx.extensionSettings[MODULE_NAME].bgmTags = tags;
+    saveSettings();
+    renderTags();
+  }
+
+  function renderTags() {
+    tagArea.innerHTML = '';
+    tags.forEach(tag => {
+      const btn = document.createElement('div');
+      btn.textContent = tag.name;
+      btn.style.cssText = `
+        padding:2px 8px;
+        border-radius:12px;
+        background:${tag.enabled ? '#8fd3f4' : '#ddd'};
+        cursor:pointer;
+      `;
+      btn.addEventListener('click', () => {
+        if (state.deleteMode) {
+          const idx = tags.indexOf(tag);
+          if (idx >= 0) tags.splice(idx, 1);
+          saveTags();
+        } else {
+          tag.enabled = !tag.enabled;
+          saveTags();
+        }
+      });
+      tagArea.appendChild(btn);
+    });
+  }
+
+  renderTags();
+
+  addBtn.onclick = () => {
+    const name = tagInput.value.trim();
+    if (!name) return;
+    if (!tags.some(t => t.name === name)) tags.push({ name, enabled: true });
+    tagInput.value = '';
+    saveTags();
+  };
+
+  delBtn.onclick = () => {
+    state.deleteMode = !state.deleteMode;
+    delBtn.style.background = state.deleteMode ? '#f88' : '';
+  };
+
+  // ⭐ 读取 ❤️音乐 条目
+  starBtn.onclick = async () => {
+    listArea.innerText = '正在读取 ❤️音乐 条目...';
+    const songs = await readWorldMusicEntry('❤️音乐');
+    if (!songs) {
+      listArea.innerText = '未找到 ❤️音乐 条目';
+      return;
+    }
+    renderList(songs);
+  };
+
+  // 🔎 搜索按钮
+  searchBtn.onclick = async () => {
+    const kw = searchInput.value.trim();
+    const limit = parseInt(limitInput.value) || 10;
+    const api = ctx.extensionSettings[MODULE_NAME].apiConfig || {};
+    listArea.innerText = '正在搜索...';
+
+    try {
+      if (!api.url) {
+        const local = localSearch(kw, limit);
+        renderList(local);
+        toaster('未配置独立API，使用本地示例数据', 'warning');
+        return;
+      }
+      const endpoint = api.url.replace(/\/$/, '') + '/v1/chat/completions';
+      const enabledTags = tags.filter(t => t.enabled).map(t => t.name);
+      const skipList = await readWorldMusicEntry('🖤音乐') || [];
+      let prompt;
+      if (!kw) {
+        prompt = `请推荐${limit}首符合这些标签的歌曲（格式“歌名 - 歌手”）,每行一条，不要输出歌手和歌名以外的内容。排除以下音乐。\n标签：${enabledTags.join('、')}\n排除：${skipList.join('、')}`;
+      } else {
+        prompt = `请推荐${limit}首与“${kw}”相关的歌曲，格式为“歌名 - 歌手”。不要输出歌手和歌名以外的内容例如推荐语。`;
+      }
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(api.key ? { 'Authorization': `Bearer ${api.key}` } : {})
+        },
+        body: JSON.stringify({
+          model: api.model,
+          messages: [
+            { role: 'system', content: '你是音乐助手，负责返回歌单。' },
+            { role: 'user', content: prompt }
+          ]
+        })
+      });
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content || '';
+      const list = text.split('\n').filter(Boolean).map(x => x.replace(/^\d+[.、]/, '').trim());
+      renderList(list.length ? list : ['（未返回有效数据）']);
+    } catch (e) {
+      debug('API搜索失败', e);
+      listArea.innerText = 'API调用失败：' + e.message;
+      toaster('API请求失败', 'error');
+    }
+  };
+
+  function localSearch(kw, limit) {
+    if (!kw) {
+      const enabledTags = tags.filter(t => t.enabled).map(t => t.name);
+      return enabledTags.slice(0, limit).map(t => `${t} - 未知歌手`);
+    } else {
+      return Array.from({ length: limit }, (_, i) => `${kw} 相关歌曲 ${i + 1} - 示例歌手`);
+    }
+  }
+
+  // 🎵 播放器核心变量
+  let Music_Audio = new Audio();
+  let Music_List = [];
+  let Music_Index = 0;
+  let Music_Mode = 'sequence'; // sequence | random | single
+  let Lyric_Timer = null;
+  // 全局变量添加
+let Lyrics_Data = []; // 存储解析后的歌词数据 [{time: seconds, text: "歌词"}]
+let Current_Lyric_Index = -1; // 当前高亮的歌词索引
+// 解析 LRC 格式歌词
+function parseLRC(lrcText) {
+  if (!lrcText) return [];
+  
+  const lines = lrcText.split('\n');
+  const lyrics = [];
+  const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/g;
+  
+  for (const line of lines) {
+    const matches = [...line.matchAll(timeRegex)];
+    if (matches.length === 0) continue;
+    
+    // 提取歌词文本（去掉时间标签）
+    const text = line.replace(timeRegex, '').trim();
+    if (!text) continue;
+    
+    // 一行可能有多个时间标签
+    for (const match of matches) {
+      const minutes = parseInt(match[1]);
+      const seconds = parseInt(match[2]);
+      const milliseconds = parseInt(match[3].padEnd(3, '0'));
+      const time = minutes * 60 + seconds + milliseconds / 1000;
+      
+      lyrics.push({ time, text });
+    }
+  }
+  
+  // 按时间排序
+  return lyrics.sort((a, b) => a.time - b.time);
+}
+
+  // 渲染歌曲列表
+  async function renderList(songs) {
+    listArea.innerHTML = '';
+    const likes = await readWorldMusicEntry('❤️音乐') || [];
+    const skips = await readWorldMusicEntry('🖤音乐') || [];
+
+    Music_List = songs.map(s => {
+      const [name, artist = '未知'] = s.split('-').map(x => x.trim());
+      return { name, artist };
+    });
+
+    songs.forEach((song, i) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:4px;border-bottom:1px solid #eee;';
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = song;
+      const btns = document.createElement('div');
+      const like = document.createElement('button');
+      const skip = document.createElement('button');
+      const play = document.createElement('button');
+      like.textContent = '❤️';
+      skip.textContent = '🖤';
+      play.textContent = '🎵';
+      like.className = skip.className = play.className = 'ha-btn';
+
+      if (likes.includes(song)) like.style.background = '#faa';
+      if (skips.includes(song)) skip.style.background = '#aaa';
+
+      btns.append(play, like, skip);
+      row.append(nameSpan, btns);
+      listArea.appendChild(row);
+
+      like.onclick = async e => {
+        e.stopPropagation();
+        if (likes.includes(song)) {
+          await removeWorldMusicEntry('❤️音乐', song);
+          toaster(`已从 ❤️音乐 移除: ${song}`, 'info');
+        } else {
+          await writeWorldMusicEntry('❤️音乐', song);
+          toaster(`已加入 ❤️音乐: ${song}`, 'success');
+        }
+        renderList(songs);
+      };
+
+      skip.onclick = async e => {
+        e.stopPropagation();
+        if (skips.includes(song)) {
+          await removeWorldMusicEntry('🖤音乐', song);
+          toaster(`已从 🖤音乐 移除: ${song}`, 'info');
+        } else {
+          await writeWorldMusicEntry('🖤音乐', song);
+          toaster(`已加入 🖤音乐: ${song}`, 'warning');
+        }
+        renderList(songs);
+      };
+
+      play.onclick = e => {
+        e.stopPropagation();
+        Music_Index = i;
+        openMusicPlayer(Music_List[i]);
+      };
+    });
+  }
+
+  // 播放器 UI + 逻辑
+  async function openMusicPlayer(songObj) {
+    const { name, artist } = songObj;
+    let existing = document.getElementById('ha-music-popup');
+    if (existing) existing.remove();
+
+    const popup = document.createElement('div');
+    popup.id = 'ha-music-popup';
+    popup.innerHTML = `
+  <div style="
+    background:#F8F8FF;color:#fff;border-radius:12px;
+    width:90%;max-width:420px;max-height:80vh;
+    position:absolute;left:50%;top:50%;
+    transform:translate(-50%,-50%);
+    box-shadow:0 4px 20px rgba(0,0,0,0.4);
+    display:flex;flex-direction:column;
+    overflow:hidden;z-index:99999;">
+    <div style="padding:10px 16px;font-weight:600;color:#778899;display:flex;justify-content:space-between;align-items:center;">
+      <span>🎵 ${name} - ${artist}</span>
+      <button id="ha-music-close" style="background:none;border:none;color:#778899;font-size:18px;">✖</button>
+    </div>
+    <div id="ha-music-lyrics" style="flex:1;padding:10px 14px;font-size:13px;overflow-y:auto;text-align:center;color:#ccc;white-space:pre-wrap;">加载歌词中...</div>
+    
+    <!-- 🎚️ 播放进度条 -->
+    <div style="padding:6px 10px;">
+      <input type="range" id="ha-progress" min="0" max="100" value="0" step="0.1" style="width:100%;">
+    </div>
+
+    <div style="padding:8px;border-top:1px solid #444;display:flex;align-items:center;justify-content:center;gap:12px;">
+      <button id="ha-prev" class="ha-btn">⏮️</button>
+      <button id="ha-play" class="ha-btn">▶️</button>
+      <button id="ha-next" class="ha-btn">⏭️</button>
+    </div>
+    <div style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;">
+      <button id="ha-mode" class="ha-btn" style="font-size:13px;">🔁 顺序播放</button>
+      <input type="range" id="ha-volume" min="0" max="1" step="0.01" value="0.7" style="width:120px;">
+    </div>
+  </div>`;
+    document.body.appendChild(popup);
+
+    document.getElementById('ha-music-close').onclick = () => popup.remove();
+    document.getElementById('ha-volume').oninput = e => (Music_Audio.volume = e.target.value);
+    document.getElementById('ha-play').onclick = togglePlay;
+    document.getElementById('ha-prev').onclick = playPrev;
+    document.getElementById('ha-next').onclick = playNext;
+    document.getElementById('ha-mode').onclick = toggleMode;
+
+    await playSong(name, artist);
+    const progress = document.getElementById('ha-progress');
+
+// 实时更新播放进度
+Music_Audio.ontimeupdate = () => {
+  if (!Music_Audio.duration) return;
+  progress.value = (Music_Audio.currentTime / Music_Audio.duration) * 100;
+};
+
+// 用户拖动进度条
+progress.oninput = e => {
+  if (!Music_Audio.duration) return;
+  const pct = e.target.value / 100;
+  Music_Audio.currentTime = pct * Music_Audio.duration;
+};
+  }
+
+  function toggleMode() {
+    const modes = ['sequence', 'random', 'single'];
+    Music_Mode = modes[(modes.indexOf(Music_Mode) + 1) % modes.length];
+    const label =
+      Music_Mode === 'sequence' ? '🔁 顺序播放' :
+      Music_Mode === 'random' ? '🔀 随机播放' : '🔂 单曲循环';
+    document.getElementById('ha-mode').textContent = label;
+  }
+
+  function togglePlay() {
+    if (Music_Audio.paused) {
+      Music_Audio.play();
+      document.getElementById('ha-play').textContent = '⏸️';
+    } else {
+      Music_Audio.pause();
+      document.getElementById('ha-play').textContent = '▶️';
+    }
+  }
+
+  function playPrev() {
+    if (Music_List.length === 0) return;
+    Music_Index = (Music_Index - 1 + Music_List.length) % Music_List.length;
+    openMusicPlayer(Music_List[Music_Index]);
+  }
+
+  function playNext() {
+    if (Music_List.length === 0) return;
+    if (Music_Mode === 'random')
+      Music_Index = Math.floor(Math.random() * Music_List.length);
+    else
+      Music_Index = (Music_Index + 1) % Music_List.length;
+    openMusicPlayer(Music_List[Music_Index]);
+  }
+
+  // 更新 playSong 函数
+async function playSong(name, artist) {
+  const keyword = `${name}-${artist}`.trim();
+  const lyricBox = document.getElementById('ha-music-lyrics');
+  lyricBox.textContent = '🎶 正在加载歌词...';
+  
+  // 获取歌词
+  const lyricData = await getLyricsData(keyword);
+  Lyrics_Data = parseLRC(lyricData.lrc);
+  
+  // 初始化歌词显示
+  if (Lyrics_Data.length > 0) {
+    renderLyrics();
+  } else {
+    lyricBox.textContent = '暂无歌词';
+  }
+  
+  // 加载音乐
+  let url = await getMusicUrl(keyword);
+  if (!url) {
+    lyricBox.textContent = '找不到音源';
+    return;
+  }
+  
+  Music_Audio.src = url;
+  Music_Audio.play();
+  document.getElementById('ha-play').textContent = '⏸️';
+  
+  // 绑定时间更新事件
+  Music_Audio.ontimeupdate = updateLyrics;
+}
+
+// 新的获取歌词函数，返回原始数据
+async function getLyricsData(keyword) {
+  try {
+    const searchRes = await fetch(`https://api.vkeys.cn/v2/music/netease?word=${encodeURIComponent(keyword)}`);
+    const searchData = await searchRes.json();
+    const songId = searchData?.data?.[0]?.id;
+    
+    if (!songId) {
+      return { lrc: '', tlyric: '' };
+    }
+    
+    const lyricRes = await fetch(`https://api.vkeys.cn/v2/music/netease/lyric?id=${songId}`);
+    const lyricData = await lyricRes.json();
+    
+    return {
+      lrc: lyricData?.data?.lrc || lyricData?.data?.lyric || '',
+      tlyric: lyricData?.data?.trans || lyricData?.data?.tlyric || ''
+    };
+  } catch (error) {
+    console.error("getLyricsData 失败:", error);
+    return { lrc: '', tlyric: '' };
+  }
+}
+
+// 渲染歌词列表
+function renderLyrics() {
+  const lyricBox = document.getElementById('ha-music-lyrics');
+  lyricBox.innerHTML = '';
+  
+  Lyrics_Data.forEach((item, index) => {
+    const div = document.createElement('div');
+    div.className = 'lyric-line';
+    div.setAttribute('data-index', index);
+    div.textContent = item.text;
+    div.style.cssText = `
+      padding: 8px 0;
+      color: #999;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    `;
+    
+    // 点击歌词跳转
+    div.onclick = () => {
+      if (Music_Audio.duration) {
+        Music_Audio.currentTime = item.time;
+      }
+    };
+    
+    lyricBox.appendChild(div);
+  });
+}
+
+// 更新歌词高亮和滚动
+function updateLyrics() {
+  if (!Music_Audio.duration || Lyrics_Data.length === 0) return;
+  
+  const currentTime = Music_Audio.currentTime;
+  const progress = document.getElementById('ha-progress');
+  
+  // 更新进度条
+  if (progress) {
+    progress.value = (currentTime / Music_Audio.duration) * 100;
+  }
+  
+  // 找到当前应该高亮的歌词
+  let targetIndex = -1;
+  for (let i = Lyrics_Data.length - 1; i >= 0; i--) {
+    if (currentTime >= Lyrics_Data[i].time) {
+      targetIndex = i;
+      break;
+    }
+  }
+  
+  // 如果索引没变，不需要更新
+  if (targetIndex === Current_Lyric_Index) return;
+  
+  Current_Lyric_Index = targetIndex;
+  const lyricBox = document.getElementById('ha-music-lyrics');
+  const lines = lyricBox.querySelectorAll('.lyric-line');
+  
+  lines.forEach((line, index) => {
+    if (index === targetIndex) {
+      // 当前行高亮
+      line.style.color = '	#4169E1';
+      line.style.fontSize = '15px';
+      line.style.fontWeight = 'bold';
+      
+      // 滚动到中间位置
+      const containerHeight = lyricBox.clientHeight;
+      const lineTop = line.offsetTop;
+      const lineHeight = line.offsetHeight;
+      const scrollTarget = lineTop - (containerHeight / 2) + (lineHeight / 2);
+      
+      lyricBox.scrollTo({
+        top: scrollTarget,
+        behavior: 'smooth'
+      });
+    } else {
+      // 其他行恢复正常
+      line.style.color = '#B0C4DE';
+      line.style.fontSize = '13px';
+      line.style.fontWeight = 'normal';
+    }
+  });
+}
+
+// 修改播放器 UI 中的歌词容器样式
+async function openMusicPlayer(songObj) {
+  const { name, artist } = songObj;
+  let existing = document.getElementById('ha-music-popup');
+  if (existing) existing.remove();
+
+  const popup = document.createElement('div');
+  popup.id = 'ha-music-popup';
+  popup.innerHTML = `
+  <div style="
+    background:#F8F8FF;color:#fff;border-radius:12px;
+    width:90%;max-width:420px;max-height:80vh;
+    position:absolute;left:50%;top:50%;
+    transform:translate(-50%,-50%);
+    box-shadow:0 4px 20px rgba(0,0,0,0.4);
+    display:flex;flex-direction:column;
+    overflow:hidden;z-index:99999;">
+    <div style="padding:10px 16px;font-weight:600;color:#778899;display:flex;justify-content:space-between;align-items:center;">
+      <span>🎵 ${name} - ${artist}</span>
+      <button id="ha-music-close" style="background:none;border:none;color:#778899;font-size:18px;">✖</button>
+    </div>
+    <div id="ha-music-lyrics" style="
+      flex:1;
+      padding:20px;
+      font-size:13px;
+      overflow-y:auto;
+      overflow-x:hidden;
+      text-align:center;
+      color:#ccc;
+      scroll-behavior:smooth;
+    ">加载歌词中...</div>
+    
+    <!-- 🎚️ 播放进度条 -->
+    <div style="padding:6px 10px;">
+      <input type="range" id="ha-progress" min="0" max="100" value="0" step="0.1" style="width:100%;">
+    </div>
+
+    <div style="padding:8px;border-top:1px solid #444;display:flex;align-items:center;justify-content:center;gap:12px;">
+      <button id="ha-prev" class="ha-btn">⏮️</button>
+      <button id="ha-play" class="ha-btn">▶️</button>
+      <button id="ha-next" class="ha-btn">⏭️</button>
+    </div>
+    <div style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;">
+      <button id="ha-mode" class="ha-btn" style="font-size:13px;">🔁 顺序播放</button>
+      <input type="range" id="ha-volume" min="0" max="1" step="0.01" value="0.7" style="width:120px;">
+    </div>
+  </div>`;
+  document.body.appendChild(popup);
+
+  document.getElementById('ha-music-close').onclick = () => {
+    popup.remove();
+    // 清理定时器
+    if (Lyric_Timer) {
+      clearInterval(Lyric_Timer);
+      Lyric_Timer = null;
+    }
+  };
+  
+  document.getElementById('ha-volume').oninput = e => (Music_Audio.volume = e.target.value);
+  document.getElementById('ha-play').onclick = togglePlay;
+  document.getElementById('ha-prev').onclick = playPrev;
+  document.getElementById('ha-next').onclick = playNext;
+  document.getElementById('ha-mode').onclick = toggleMode;
+
+  await playSong(name, artist);
+  
+  const progress = document.getElementById('ha-progress');
+  // 用户拖动进度条
+  progress.oninput = e => {
+    if (!Music_Audio.duration) return;
+    const pct = e.target.value / 100;
+    Music_Audio.currentTime = pct * Music_Audio.duration;
+  };
+}
+
+// 音频结束时处理
+Music_Audio.onended = () => {
+  if (Music_Mode === 'single') {
+    Music_Audio.play();
+  } else {
+    playNext();
+  }
+};
+
+  
+
+  async function getMusicUrl(keyword) {
+    try {
+      const res = await fetch(`https://api.vkeys.cn/v2/music/netease?word=${keyword}`);
+      const data = await res.json();
+      if (!data?.data?.length) return '';
+      const id = data.data[0].id;
+      const r2 = await fetch(`https://api.vkeys.cn/v2/music/netease?id=${id}`);
+      const d2 = await r2.json();
+      return d2?.data?.url || '';
+    } catch {
+      return '';
+    }
+  }
+
+  async function getLyrics(keyword) {
+  try {
+    // 先通过关键词搜索歌曲，获取网易云音乐的歌曲 ID
+    const searchRes = await fetch(`https://api.vkeys.cn/v2/music/netease?word=${encodeURIComponent(keyword)}`);
+    const searchData = await searchRes.json();
+    const songId = searchData?.data?.[0]?.id;
+    if (!songId) {
+      console.warn("getLyrics: 未找到对应歌曲ID");
+      return '暂无歌词';
+    }
+
+    // 使用网易云歌词接口获取歌词和翻译
+    const lyricRes = await fetch(`https://api.vkeys.cn/v2/music/netease/lyric?id=${songId}`);
+    const lyricData = await lyricRes.json();
+
+    // 网易云歌词接口返回字段格式： data.lrc, data.lyric, data.trans, data.tlyric
+    const lrcText = lyricData?.data?.lrc || lyricData?.data?.lyric;
+    const transText = lyricData?.data?.trans || lyricData?.data?.tlyric;
+
+    // 处理歌词文本
+    if (!lrcText) {
+      console.warn("getLyrics: 无歌词文本", lyricData);
+      return '暂无歌词';
+    }
+
+    // 合并中英文歌词（如果有翻译）
+    let lyricResult = lrcText;
+    if (transText) {
+      lyricResult += '\n\n---- 翻译 ----\n' + transText;
+    }
+
+    return lyricResult;
+  } catch (error) {
+    console.error("getLyrics 失败:", error);
+    return '歌词加载失败';
+  }
+}
+
+
+
+  // 世界书接口部分
+  async function findHealthWorldFile() {
+    try {
+      const moduleWI = await import('/scripts/world-info.js');
+      const selected = moduleWI.selected_world_info || [];
+      for (const WI of selected) if (WI.includes('健康生活助手')) return WI;
+      return null;
+    } catch (e) {
+      debug('findHealthWorldFile异常', e);
+      return null;
+    }
+  }
+
+  async function readWorldMusicEntry(label) {
+    try {
+      const fileId = await findHealthWorldFile();
+      if (!fileId) return null;
+      const moduleWI = await import('/scripts/world-info.js');
+      const worldInfo = await moduleWI.loadWorldInfo(fileId);
+      const entries = worldInfo.entries || {};
+      for (const id in entries) {
+        const entry = entries[id];
+        if (!entry.disable && (entry.title === label || (entry.comment || '').includes(label))) {
+          const content = entry.content || '';
+          return content.split('\n').filter(Boolean);
+        }
+      }
+      return null;
+    } catch (e) {
+      debug('readWorldMusicEntry异常', e);
+      return null;
+    }
+  }
+
+  async function writeWorldMusicEntry(label, songLine) {
+    const fileId = await findHealthWorldFile();
+    if (!fileId) return;
+    const moduleWI = await import('/scripts/world-info.js');
+    const worldInfo = await moduleWI.loadWorldInfo(fileId);
+    const entries = worldInfo.entries || {};
+    let targetUID = null;
+    for (const id in entries) {
+      const entry = entries[id];
+      if (!entry.disable && (entry.title === label || (entry.comment || '').includes(label))) {
+        targetUID = entry.uid;
+        break;
+      }
+    }
+    if (!targetUID) return;
+    const existing = entries[targetUID].content || '';
+    if (existing.includes(songLine)) return;
+    const newContent = existing + (existing ? '\n' : '') + songLine;
+    await ctx.SlashCommandParser.commands['setentryfield']
+      .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+  }
+
+  async function removeWorldMusicEntry(label, songLine) {
+    const fileId = await findHealthWorldFile();
+    if (!fileId) return;
+    const moduleWI = await import('/scripts/world-info.js');
+    const worldInfo = await moduleWI.loadWorldInfo(fileId);
+    const entries = worldInfo.entries || {};
+    for (const id in entries) {
+      const entry = entries[id];
+      if (!entry.disable && (entry.title === label || (entry.comment || '').includes(label))) {
+        const arr = (entry.content || '').split('\n').filter(Boolean);
+        const newArr = arr.filter(line => line.trim() !== songLine.trim());
+        const newContent = newArr.join('\n');
+        await ctx.SlashCommandParser.commands['setentryfield']
+          .callback({ file: fileId, uid: entry.uid, field: 'content' }, newContent);
+        break;
+      }
+    }
+  }
+}
+
 async function showClearBook() {
   content.innerHTML = `
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
