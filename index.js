@@ -198,6 +198,7 @@ enableDrag(fab);
           <div class="ha-btn" data-key="diet">健康饮食</div>
           <div class="ha-btn" data-key="mental">心理健康</div>
           <div class="ha-btn" data-key="exercise">适度运动</div>
+          <div class="ha-btn" data-key="finance">收支平衡</div>
           <div class="ha-btn" data-key="wishes">心愿清单</div>
           <div class="ha-btn" data-key="social">习惯养成</div>
           <div class="ha-btn" data-key="todo">待办事项</div>
@@ -248,6 +249,7 @@ enableDrag(fab);
           else if (key === 'diet') showDiet();
           else if (key === 'mental') showMental();
           else if (key === 'exercise') showExercise();
+          else if (key === 'finance') showFinance();
           else if (key === 'wishes') showWishes();
           else if (key === 'social') showSocial();
           else if (key === 'todo') showTodo();
@@ -666,252 +668,463 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
   renderLog();
 }
 
-   async function showMental() {
-  content.style.display = 'block';
-  content.innerHTML = `
-    <div style="font-weight:600;margin-bottom:6px">心理健康</div>
-    <button id="ha-emotion" class="ha-btn" style="width:100%;margin-bottom:6px">情绪记录</button>
-    <div style="margin-bottom:6px">
-      <label style="display:block;font-size:12px;color:#666">正念冥想计时（分钟，0=即时指导）</label>
-      <input id="ha-meditation-min" type="range" min="0" max="30" step="5" value="5" style="width:150px"/>
-      <span id="ha-meditation-val">5</span> 分钟
-      <span id="ha-medit-timer" style="margin-left:12px;color:#007acc;font-weight:600"></span>
-      <button id="ha-start-medit" class="ha-btn" style="margin-left:8px">开始</button>
-      <button id="ha-stop-medit" class="ha-btn" style="margin-left:8px;display:none">结束</button>
-    </div>
-    <div id="ha-mental-subpanel"
-         style="margin-top:6px;padding:6px;border:1px solid #ddd;background:#f9f9f9;white-space:pre-wrap;min-height:60px;max-height:200px;overflow:auto;display:block;">
-    </div>
-    <div id="ha-mental-log" class="ha-small"></div>
-    <div id="ha-mental-debug" style="margin-top:8px;padding:6px;border:1px solid #ddd;font-size:12px;max-height:160px;overflow:auto;background:#fafafa;white-space:pre-wrap"></div>
-  `;
-
-  const logEl = document.getElementById('ha-mental-log');
-  const debugEl = document.getElementById('ha-mental-debug');
-  const subPanel = document.getElementById('ha-mental-subpanel');
-  const slider = document.getElementById('ha-meditation-min');
-  const sliderVal = document.getElementById('ha-meditation-val');
-  const timerEl = document.getElementById('ha-medit-timer');
-  const btnStart = document.getElementById('ha-start-medit');
-  const btnStop = document.getElementById('ha-stop-medit');
-
-  let timerId = null;
-  let startTime = null;
-  let targetDuration = 0; // 分钟
-
-  slider.addEventListener('input', () => {
-    sliderVal.innerText = slider.value;
-  });
-
-  function debugLog(...args) {
-    const ts = new Date().toLocaleTimeString();
-    const msg = `[${ts}] ` + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
-    debugEl.innerText += msg + "\n";
-    debugEl.scrollTop = debugEl.scrollHeight;
-    console.log('[健康生活助手]', ...args);
-  }
-
-  async function findHealthWorldFile() {
-    try {
-      const moduleWI = await import('/scripts/world-info.js');
-      const selected = moduleWI.selected_world_info || [];
-      debugLog('selected_world_info:', selected);
-      for (const WI of selected) {
-        if (WI.includes('健康生活助手')) {
-          debugLog('匹配到世界书文件:', WI);
-          return WI;
-        }
-      }
-      debugLog('未找到名为 "健康生活助手" 的世界书文件');
-      return null;
-    } catch (e) {
-      debugLog('findHealthWorldFile 异常:', e.message || e);
-      return null;
+ async function showMental() {
+    content.style.display = 'block';
+    content.innerHTML = `<div style="font-weight:600;margin-bottom:6px">心理健康</div>
+        <div style="margin-bottom:6px">
+            <button id="ha-emotion" class="ha-btn" style="margin-bottom:6px">情绪记录</button>
+            <button id="ha-attention-shift" class="ha-btn" style="margin-bottom:6px;margin-left:6px">转移注意力</button>
+            <button id="ha-thought-chain" class="ha-btn" style="margin-bottom:6px;margin-left:6px">思维链识别</button>
+        </div>
+        <div style="margin-bottom:6px">
+            <label style="display:block;font-size:12px;color:#666">正念冥想计时（分钟，0=即时指导）</label>
+            <input id="ha-meditation-min" type="range" min="0" max="30" step="5" value="5" style="width:150px"/>
+            <span id="ha-meditation-val">5</span> 分钟
+            <span id="ha-medit-timer" style="margin-left:12px;color:#007acc;font-weight:600"></span>
+            <button id="ha-start-medit" class="ha-btn" style="margin-left:8px">开始</button>
+            <button id="ha-stop-medit" class="ha-btn" style="margin-left:8px;display:none">结束</button>
+        </div>
+        <div id="ha-mental-subpanel" style="margin-top:6px;padding:6px;border:1px solid #ddd;background:#f9f9f9;white-space:pre-wrap;min-height:60px;max-height:200px;overflow:auto;display:block;">
+        </div>
+        <div id="ha-mental-log" class="ha-small"></div>
+        <div id="ha-mental-debug" style="margin-top:8px;padding:6px;border:1px solid #ddd;font-size:12px;max-height:160px;overflow:auto;background:#fafafa;white-space:pre-wrap"></div>`;
+    const logEl = document.getElementById('ha-mental-log');
+    const debugEl = document.getElementById('ha-mental-debug');
+    const subPanel = document.getElementById('ha-mental-subpanel');
+    const slider = document.getElementById('ha-meditation-min');
+    const sliderVal = document.getElementById('ha-meditation-val');
+    const timerEl = document.getElementById('ha-medit-timer');
+    const btnStart = document.getElementById('ha-start-medit');
+    const btnStop = document.getElementById('ha-stop-medit');
+    let timerId = null;
+    let startTime = null;
+    let targetDuration = 0; // 分钟
+    slider.addEventListener('input', () => {
+        sliderVal.innerText = slider.value;
+    });
+    function debugLog(...args) {
+        const ts = new Date().toLocaleTimeString();
+        const msg = `[${ts}] ` + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+        debugEl.innerText += msg + "\n";
+        debugEl.scrollTop = debugEl.scrollHeight;
+        console.log('[健康生活助手]', ...args);
     }
-  }
-
-  async function appendToWorldInfoMentalLog(contentText) {
-    try {
-      const fileId = await findHealthWorldFile();
-      if (!fileId) { debugLog('写入世界书: 未找到世界书文件，跳过写入'); return; }
-
-      const moduleWI = await import('/scripts/world-info.js');
-      const worldInfo = await moduleWI.loadWorldInfo(fileId);
-      const entries = worldInfo.entries || {};
-      debugLog('loadWorldInfo entries count:', Object.keys(entries).length);
-
-      let targetUID = null;
-      for (const id in entries) {
-        const entry = entries[id];
-        const comment = entry.comment || '';
-        if (!entry.disable && (comment.includes('心理') || entry.title === '心理')) {
-          targetUID = entry.uid;
-          debugLog('找到心理 entry: uid=', targetUID, 'comment=', comment);
-          break;
+    async function findHealthWorldFile() {
+        try {
+            const moduleWI = await import('/scripts/world-info.js');
+            const selected = moduleWI.selected_world_info || [];
+            debugLog('selected_world_info:', selected);
+            for (const WI of selected) {
+                if (WI.includes('健康生活助手')) {
+                    debugLog('匹配到世界书文件:', WI);
+                    return WI;
+                }
+            }
+            debugLog('未找到名为 "健康生活助手" 的世界书文件');
+            return null;
+        } catch (e) {
+            debugLog('findHealthWorldFile 异常:', e.message || e);
+            return null;
         }
-      }
-
-      if (!targetUID) {
-        debugLog('未找到心理 entry（未创建），写入被跳过。');
-        return;
-      }
-
-      const recLine = `${new Date().toLocaleString()}：${contentText}`;
-      const existing = entries[targetUID].content || '';
-      const newContent = existing + (existing ? '\n' : '') + recLine;
-
-      debugLog('准备写入 world entry:', { file: fileId, uid: targetUID, newLine: recLine });
-      await globalThis.SillyTavern.getContext()
-        .SlashCommandParser.commands['setentryfield']
-        .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
-
-      debugLog('写入世界书成功:', recLine);
-    } catch (e) {
-      debugLog('写入世界书失败:', e.message || e);
     }
-  }
-
-  // === 新增：写入冥想条目 ===
-  async function appendToWorldInfoMeditationLog(durationMinutes) {
-    try {
-      const fileId = await findHealthWorldFile();
-      if (!fileId) return;
-
-      const moduleWI = await import('/scripts/world-info.js');
-      const worldInfo = await moduleWI.loadWorldInfo(fileId);
-      const entries = worldInfo.entries || {};
-
-      let targetUID = null;
-      for (const id in entries) {
-        const entry = entries[id];
-        const comment = entry.comment || '';
-        if (!entry.disable && (comment.includes('冥想') || entry.title === '冥想')) {
-          targetUID = entry.uid;
-          break;
+    async function appendToWorldInfoMentalLog(contentText) {
+        try {
+            const fileId = await findHealthWorldFile();
+            if (!fileId) {
+                debugLog('写入世界书: 未找到世界书文件，跳过写入');
+                return;
+            }
+            const moduleWI = await import('/scripts/world-info.js');
+            const worldInfo = await moduleWI.loadWorldInfo(fileId);
+            const entries = worldInfo.entries || {};
+            debugLog('loadWorldInfo entries count:', Object.keys(entries).length);
+            
+            let targetUID = null;
+            for (const id in entries) {
+                const entry = entries[id];
+                const comment = entry.comment || '';
+                if (!entry.disable && (comment.includes('心理') || entry.title === '心理')) {
+                    targetUID = entry.uid;
+                    debugLog('找到心理 entry: uid=', targetUID, 'comment=', comment);
+                    break;
+                }
+            }
+            
+            if (!targetUID) {
+                debugLog('未找到心理 entry（未创建），写入被跳过。');
+                return;
+            }
+            
+            const recLine = `${new Date().toLocaleString()}：${contentText}`;
+            const existing = entries[targetUID].content || '';
+            const newContent = existing + (existing ? '\n' : '') + recLine;
+            
+            debugLog('准备写入 world entry:', { file: fileId, uid: targetUID, newLine: recLine });
+            await globalThis.SillyTavern.getContext()
+                .SlashCommandParser.commands['setentryfield']
+                .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+            
+            debugLog('写入世界书成功:', recLine);
+        } catch (e) {
+            debugLog('写入世界书失败:', e.message || e);
         }
-      }
-      if (!targetUID) return;
-
-      const recLine = `${new Date().toLocaleString()}：本次冥想 ${durationMinutes} 分钟`;
-      const existing = entries[targetUID].content || '';
-      const newContent = existing + (existing ? '\n' : '') + recLine;
-
-      await globalThis.SillyTavern.getContext()
-        .SlashCommandParser.commands['setentryfield']
-        .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
-
-      debugLog('冥想记录写入成功:', recLine);
-    } catch (e) {
-      debugLog('冥想写入失败:', e.message || e);
     }
-  }
+    // === 新增：写入冥想条目 ===
+    async function appendToWorldInfoMeditationLog(durationMinutes) {
+        try {
+            const fileId = await findHealthWorldFile();
+            if (!fileId) return;
+            
+            const moduleWI = await import('/scripts/world-info.js');
+            const worldInfo = await moduleWI.loadWorldInfo(fileId);
+            const entries = worldInfo.entries || {};
+            
+            let targetUID = null;
+            for (const id in entries) {
+                const entry = entries[id];
+                const comment = entry.comment || '';
+                if (!entry.disable && (comment.includes('冥想') || entry.title === '冥想')) {
+                    targetUID = entry.uid;
+                    break;
+                }
+            }
+            
+            if (!targetUID) return;
+            
+            const recLine = `${new Date().toLocaleString()}：本次冥想 ${durationMinutes} 分钟`;
+            const existing = entries[targetUID].content || '';
+            const newContent = existing + (existing ? '\n' : '') + recLine;
+            
+            await globalThis.SillyTavern.getContext()
+                .SlashCommandParser.commands['setentryfield']
+                .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+            
+            debugLog('冥想记录写入成功:', recLine);
+        } catch (e) {
+            debugLog('冥想写入失败:', e.message || e);
+        }
+    }
+    // === 新增：写入思维链条目 ===
+    async function appendToWorldInfoThoughtChain(thoughtText) {
+        try {
+            const fileId = await findHealthWorldFile();
+            if (!fileId) return;
+            
+            const moduleWI = await import('/scripts/world-info.js');
+            const worldInfo = await moduleWI.loadWorldInfo(fileId);
+            const entries = worldInfo.entries || {};
+            
+            let targetUID = null;
+            for (const id in entries) {
+                const entry = entries[id];
+                const comment = entry.comment || '';
+                if (!entry.disable && (comment.includes('思维链') || entry.title === '思维链')) {
+                    targetUID = entry.uid;
+                    break;
+                }
+            }
+            
+            if (!targetUID) return;
+            
+            const recLine = `${new Date().toLocaleString()}：${thoughtText}`;
+            const existing = entries[targetUID].content || '';
+            const newContent = existing + (existing ? '\n' : '') + recLine;
+            
+            await globalThis.SillyTavern.getContext()
+                .SlashCommandParser.commands['setentryfield']
+                .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+            
+            debugLog('思维链记录写入成功:', recLine);
+        } catch (e) {
+            debugLog('思维链写入失败:', e.message || e);
+        }
+    }
+    // === 新增：写入注意力转移条目（先清空） ===
+    async function setWorldInfoAttentionShift(selectedOption) {
+        try {
+            const fileId = await findHealthWorldFile();
+            if (!fileId) return;
+            
+            const moduleWI = await import('/scripts/world-info.js');
+            const worldInfo = await moduleWI.loadWorldInfo(fileId);
+            const entries = worldInfo.entries || {};
+            
+            let targetUID = null;
+            for (const id in entries) {
+                const entry = entries[id];
+                const comment = entry.comment || '';
+                if (!entry.disable && (comment.includes('注意力转移') || entry.title === '注意力转移')) {
+                    targetUID = entry.uid;
+                    break;
+                }
+            }
+            
+            if (!targetUID) return;
+            
+            const newContent = `${new Date().toLocaleString()}：${selectedOption}`;
+            
+            await globalThis.SillyTavern.getContext()
+                .SlashCommandParser.commands['setentryfield']
+                .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+            
+            debugLog('注意力转移记录写入成功:', newContent);
+        } catch (e) {
+            debugLog('注意力转移写入失败:', e.message || e);
+        }
+    }
+    document.getElementById('ha-emotion').addEventListener('click', () => {
+        const txt = prompt('记录当前情绪（例如：轻松 / 焦虑 / 愉快）：','');
+        if (!txt) return;
+        const now = new Date();
+        ctx.extensionSettings[MODULE_NAME].mental.push({
+            text: txt,
+            ts: now.toISOString()
+        });
+        saveSettings();
+        alert('情绪已记录');
+        renderLog();
+        appendToWorldInfoMentalLog(txt);
+    });
+    // === 新增：思维链识别按钮 ===
+    document.getElementById('ha-thought-chain').addEventListener('click', () => {
+        const txt = prompt('请输入当前的思维链：', '');
+        if (!txt) return;
+        appendToWorldInfoThoughtChain(txt);
+        alert('思维链已记录');
+    });
+  // === 新增：转移注意力按钮 ===
+document.getElementById('ha-attention-shift').addEventListener('click', async () => {
+    try {
+        const api = ctx.extensionSettings[MODULE_NAME].apiConfig || {};
+        if (!api.url) {
+            toastr.warning('未配置独立 API');
+            debugLog('注意力转移: 未配置 API');
+            return;
+        }
 
-  document.getElementById('ha-emotion').addEventListener('click', () => {
-    const txt = prompt('记录当前情绪（例如：轻松 / 焦虑 / 愉快）：','');
-    if (!txt) return;
-    const now = new Date();
-    ctx.extensionSettings[MODULE_NAME].mental.push({ text: txt, ts: now.toISOString() });
-    saveSettings();
-    alert('情绪已记录');
+        // === 创建弹窗 ===
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 320px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            z-index: 200000;
+            padding: 20px;
+            text-align: center;
+        `;
+        modal.innerHTML = `
+            <div style="font-size:16px;margin-bottom:10px;">正在生成注意力转移选项...</div>
+            <div class="loading-dots" style="font-size:24px;letter-spacing:3px;">⏳</div>
+        `;
+        document.body.appendChild(modal);
+
+        // === API 调用 ===
+        const endpoint = api.url.replace(/\/$/, '') + '/v1/chat/completions';
+        debugLog('注意力转移: 调用接口', endpoint, 'model:', api.model);
+
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(api.key ? { 'Authorization': `Bearer ${api.key}` } : {})
+            },
+            body: JSON.stringify({
+                model: api.model,
+                messages: [
+                    {
+                        role: 'system',
+                        content: '生成5个转移注意力的活动建议，每个建议包含活动名称、简短描述和英文图片提示词。\n转移注意力的活动不要太老套，要尽量有趣新颖具体，避免像传统心理咨询那样软绵绵小心翼翼给一些宽泛没什么错却也没什么用的建议。\n英文提示词务必使用以下方式生成:生成符合描述的若干单词短语，将其用%拼接。例如:描述是蓝天下一个女人在街上散步，对应的英文提示词就是a%woman%walking%street%blue%sky,提示词不可出现空格与其他标点符号，必须用%连接。\n请严格返回 JSON 数组格式，如：[{"title":"活动","description":"说明","imagePrompt":"英文提示词"}]'
+                    },
+                    {
+                        role: 'user',
+                        content: '务必仅返回 JSON，无任何多余文本或注释。'
+                    }
+                ],
+                max_tokens: 5000
+            })
+        });
+
+        debugLog('注意力转移: HTTP 状态', res.status);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+
+        const data = await res.json();
+        let responseText = data.choices?.[0]?.message?.content || '';
+        debugLog(`注意力转移: 返回完整内容 (${responseText.length} 字符)`, responseText);
+
+        // === 🧹 清理 Markdown 包裹的 JSON ===
+        responseText = responseText
+            .replace(/^```(?:json)?/i, '')  // 移除开头的 ``` 或 ```json
+            .replace(/```$/, '')            // 移除结尾的 ```
+            .trim();
+
+        // === 解析 JSON，带多层容错 ===
+        let options;
+        try {
+            options = JSON.parse(responseText);
+            if (typeof options === 'string') {
+                options = JSON.parse(options); // 若模型返回二次嵌套字符串
+            }
+            if (!Array.isArray(options)) throw new Error('不是数组格式');
+        } catch (e) {
+            debugLog('注意力转移: JSON 解析失败，使用默认值', e.message);
+            toastr.warning('API 返回格式异常，使用默认选项');
+            options = [
+                { title: "散步", description: "到户外散步15分钟，呼吸新鲜空气", imagePrompt: "peaceful walking in nature" },
+                { title: "听音乐", description: "听一些舒缓的音乐放松心情", imagePrompt: "relaxing with headphones music" },
+                { title: "绘画", description: "随意画画，表达内心感受", imagePrompt: "person painting artwork" },
+                { title: "深呼吸", description: "做5分钟深呼吸练习", imagePrompt: "meditation deep breathing" },
+                { title: "整理房间", description: "整理一小块区域，获得成就感", imagePrompt: "organizing clean room" }
+            ];
+        }
+
+        // === 为每个选项生成图片 URL ===
+        options = options.map(opt => ({
+            ...opt,
+            imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(opt.imagePrompt)}`
+        }));
+
+        // === UI更新函数 ===
+        let currentIndex = 0;
+        function updateModal() {
+            const current = options[currentIndex];
+            modal.innerHTML = `
+                <div>
+                    <img src="${current.imageUrl}" style="width:100%;height:200px;object-fit:cover;border-radius:8px;margin-bottom:15px;">
+                    <h3 style="margin:10px 0">${current.title}</h3>
+                    <p style="margin:10px 0;color:#666">${current.description}</p>
+                    <div style="margin-top:20px">
+                        <button id="modal-prev" class="ha-btn" style="margin-right:10px">←</button>
+                        <button id="modal-adopt" class="ha-btn" style="margin-right:10px">采纳</button>
+                        <button id="modal-next" class="ha-btn" style="margin-right:10px">→</button>
+                        <button id="modal-close" class="ha-btn">关闭</button>
+                    </div>
+                </div>
+            `;
+
+            modal.querySelector('#modal-prev').addEventListener('click', () => {
+                currentIndex = (currentIndex - 1 + options.length) % options.length;
+                updateModal();
+            });
+            modal.querySelector('#modal-next').addEventListener('click', () => {
+                currentIndex = (currentIndex + 1) % options.length;
+                updateModal();
+            });
+            modal.querySelector('#modal-adopt').addEventListener('click', () => {
+                const selected = options[currentIndex];
+                setWorldInfoAttentionShift(`${selected.title}：${selected.description}`);
+                toastr.success('已采纳注意力转移方案');
+                document.body.removeChild(modal);
+            });
+            modal.querySelector('#modal-close').addEventListener('click', () => {
+                document.body.removeChild(modal);
+            });
+        }
+
+        updateModal();
+
+    } catch (e) {
+        debugLog('注意力转移生成失败:', e.message || e);
+        toastr.error('生成失败：' + (e.message || e));
+    }
+});
+    // === 冥想开始 ===
+    btnStart.addEventListener('click', async () => {
+        const mins = Number(slider.value);
+        targetDuration = mins;
+        startTime = new Date();
+        timerEl.innerText = ''; // 清空计时显示
+        btnStart.style.display = 'none';
+        btnStop.style.display = 'inline-block';
+        // 启动计时器
+        if (timerId) clearInterval(timerId);
+        timerId = setInterval(() => {
+            const elapsedSec = Math.floor((Date.now() - startTime.getTime()) / 1000);
+            if (mins === 0) {
+                timerEl.innerText = `已进行 ${Math.floor(elapsedSec / 60)}分${elapsedSec % 60}秒`;
+            } else {
+                const totalSec = mins * 60;
+                const remain = totalSec - elapsedSec;
+                if (remain >= 0) {
+                    timerEl.innerText = `剩余 ${Math.floor(remain / 60)}分${remain % 60}秒`;
+                } else {
+                    stopMeditation();
+                }
+            }
+        }, 1000);
+        // 保持原有 API 调用逻辑
+        try {
+            const api = ctx.extensionSettings[MODULE_NAME].apiConfig || {};
+            if (!api.url) {
+                subPanel.innerText = '未配置独立 API，示例提示：深呼吸、放松身体、正念冥想。';
+                debugLog('正念指导: 未配置 API');
+                return;
+            }
+            
+            const endpoint = api.url.replace(/\/$/, '') + '/v1/chat/completions';
+            debugLog('正念指导调用: 请求将发送到', endpoint, 'model:', api.model);
+            
+            const history = ctx.extensionSettings[MODULE_NAME].mental.map(m => 
+                `${m.ts}：${m.text}`
+            ).join('\n');
+            
+            const promptText = mins === 0 
+                ? `请根据以下用户情绪记录，立即给出一段简短正念指导和放松提示：\n${history || '无记录'}`
+                : `请提供一段正念冥想指导，时长约 ${mins} 分钟，根据用户历史情绪记录：\n${history || '无记录'}`;
+            
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(api.key ? { 'Authorization': `Bearer ${api.key}` } : {})
+                },
+                body: JSON.stringify({
+                    model: api.model,
+                    messages: [
+                        { role: 'system', content: '你是心理健康指导专家，为用户提供正念冥想与情绪缓解建议。' },
+                        { role: 'user', content: promptText }
+                    ],
+                    max_tokens: 5000
+                })
+            });
+            
+            debugLog('正念指导调用: HTTP 状态', res.status);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            
+            const data = await res.json();
+            const text = data.choices?.[0]?.message?.content || JSON.stringify(data);
+            subPanel.innerText = text;
+            subPanel.scrollTop = subPanel.scrollHeight;
+            
+            debugLog('正念指导调用: 返回摘录', text.slice(0, 200));
+        } catch (e) {
+            subPanel.innerText = 'API 请求失败：' + (e.message || e);
+            subPanel.scrollTop = subPanel.scrollHeight;
+            debugLog('正念指导调用失败:', e.message || e);
+        }
+    });
+    // === 冥想结束 ===
+    function stopMeditation() {
+        if (!startTime) return;
+        const duration = Math.floor((Date.now() - startTime.getTime()) / 60000); // 实际分钟数
+        clearInterval(timerId);
+        timerId = null;
+        btnStart.style.display = 'inline-block';
+        btnStop.style.display = 'none';
+        timerEl.innerText = `本次冥想结束，共进行 ${duration} 分钟`;
+        appendToWorldInfoMeditationLog(duration);
+        startTime = null;
+    }
+    btnStop.addEventListener('click', stopMeditation);
+    function renderLog() {
+        const arr = ctx.extensionSettings[MODULE_NAME].mental || [];
+        logEl.innerText = `已记录 ${arr.length} 条情绪记录（存储在扩展设置与世界书中）`;
+    }
     renderLog();
-    appendToWorldInfoMentalLog(txt);
-  });
-
-  // === 冥想开始 ===
-  btnStart.addEventListener('click', async () => {
-    const mins = Number(slider.value);
-    targetDuration = mins;
-    startTime = new Date();
-    timerEl.innerText = ''; // 清空计时显示
-    btnStart.style.display = 'none';
-    btnStop.style.display = 'inline-block';
-
-    // 启动计时器
-    if (timerId) clearInterval(timerId);
-    timerId = setInterval(() => {
-      const elapsedSec = Math.floor((Date.now() - startTime.getTime()) / 1000);
-      if (mins === 0) {
-        timerEl.innerText = `已进行 ${Math.floor(elapsedSec / 60)}分${elapsedSec % 60}秒`;
-      } else {
-        const totalSec = mins * 60;
-        const remain = totalSec - elapsedSec;
-        if (remain >= 0) {
-          timerEl.innerText = `剩余 ${Math.floor(remain / 60)}分${remain % 60}秒`;
-        } else {
-          stopMeditation();
-        }
-      }
-    }, 1000);
-
-    // 保持原有 API 调用逻辑
-    try {
-      const api = ctx.extensionSettings[MODULE_NAME].apiConfig || {};
-      if (!api.url) {
-        subPanel.innerText = '未配置独立 API，示例提示：深呼吸、放松身体、正念冥想。';
-        debugLog('正念指导: 未配置 API');
-        return;
-      }
-
-      const endpoint = api.url.replace(/\/$/, '') + '/v1/chat/completions';
-      debugLog('正念指导调用: 请求将发送到', endpoint, 'model:', api.model);
-
-      const history = ctx.extensionSettings[MODULE_NAME].mental.map(m => `${m.ts}：${m.text}`).join('\n');
-      const promptText = mins === 0
-        ? `请根据以下用户情绪记录，立即给出一段简短正念指导和放松提示：\n${history || '无记录'}`
-        : `请提供一段正念冥想指导，时长约 ${mins} 分钟，根据用户历史情绪记录：\n${history || '无记录'}`;
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(api.key ? { 'Authorization': `Bearer ${api.key}` } : {})
-        },
-        body: JSON.stringify({
-          model: api.model,
-          messages: [
-            { role: 'system', content: '你是心理健康指导专家，为用户提供正念冥想与情绪缓解建议。' },
-            { role: 'user', content: promptText }
-          ],
-          max_tokens: 5000
-        })
-      });
-
-      debugLog('正念指导调用: HTTP 状态', res.status);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-
-      const data = await res.json();
-      const text = data.choices?.[0]?.message?.content || JSON.stringify(data);
-      subPanel.innerText = text;
-      subPanel.scrollTop = subPanel.scrollHeight;
-      debugLog('正念指导调用: 返回摘录', text.slice(0, 200));
-    } catch (e) {
-      subPanel.innerText = 'API 请求失败：' + (e.message || e);
-      subPanel.scrollTop = subPanel.scrollHeight;
-      debugLog('正念指导调用失败:', e.message || e);
-    }
-  });
-
-  // === 冥想结束 ===
-  function stopMeditation() {
-    if (!startTime) return;
-    const duration = Math.floor((Date.now() - startTime.getTime()) / 60000); // 实际分钟数
-    clearInterval(timerId);
-    timerId = null;
-    btnStart.style.display = 'inline-block';
-    btnStop.style.display = 'none';
-    timerEl.innerText = `本次冥想结束，共进行 ${duration} 分钟`;
-    appendToWorldInfoMeditationLog(duration);
-    startTime = null;
-  }
-
-  btnStop.addEventListener('click', stopMeditation);
-
-  function renderLog() {
-    const arr = ctx.extensionSettings[MODULE_NAME].mental || [];
-    logEl.innerText = `已记录 ${arr.length} 条情绪记录（存储在扩展设置与世界书中）`;
-  }
-
-  renderLog();
 }
 
       async function showExercise() {
@@ -1069,6 +1282,272 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
   }
 
   renderList();
+}
+async function showFinance() {
+  const container = content;
+  container.style.display = 'block';
+  container.innerHTML = `
+    <div style="font-weight:600;margin-bottom:6px">收支平衡</div>
+
+    <!-- 收入标签 -->
+    <div style="margin-bottom:6px;">
+      <div><b>收入标签</b></div>
+      <div style="display:flex;gap:6px;margin-top:4px;">
+        <input id="ha-income-input" placeholder="输入新收入标签" style="flex:1;padding:4px;border:1px solid #ccc;border-radius:4px;">
+        <button id="ha-income-add" class="ha-btn" style="width:50px;">➕</button>
+        <button id="ha-income-del" class="ha-btn" style="width:50px;">🗑️</button>
+      </div>
+      <div id="ha-income-tags" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+    </div>
+
+    <!-- 支出标签 -->
+    <div style="margin-bottom:6px;">
+      <div><b>支出标签</b></div>
+      <div style="display:flex;gap:6px;margin-top:4px;">
+        <input id="ha-expense-input" placeholder="输入新支出标签" style="flex:1;padding:4px;border:1px solid #ccc;border-radius:4px;">
+        <button id="ha-expense-add" class="ha-btn" style="width:50px;">➕</button>
+        <button id="ha-expense-del" class="ha-btn" style="width:50px;">🗑️</button>
+      </div>
+      <div id="ha-expense-tags" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+    </div>
+
+    <!-- 汇总 -->
+    <div id="ha-finance-summary" style="margin:10px 0;padding:6px;border:1px solid #ddd;background:#f9f9f9;">
+      <div>当月总收入：<span id="ha-total-income">0</span> 元</div>
+      <div>当月总支出：<span id="ha-total-expense">0</span> 元</div>
+      <div><b>当月结余：</b><span id="ha-total-balance">0</span> 元</div>
+    </div>
+
+    <!-- 功能按钮 -->
+    <div style="display:flex;gap:8px;margin-bottom:6px;">
+      <button id="ha-income-analysis" class="ha-btn" style="flex:1;">收入分析</button>
+      <button id="ha-expense-analysis" class="ha-btn" style="flex:1;">支出分析</button>
+      <button id="ha-detail" class="ha-btn" style="flex:1;">收支明细</button>
+    </div>
+
+    <!-- 输出区 -->
+    <div id="ha-finance-result" style="margin-top:6px;padding:6px;border:1px solid #ddd;background:#fafafa;white-space:pre-wrap;min-height:60px;max-height:300px;overflow:auto;"></div>
+  `;
+
+  const state = ctx.extensionSettings[MODULE_NAME];
+  if (!state.finance) {
+    state.finance = { incomeTags: [], expenseTags: [], records: [] };
+    saveSettings();
+  }
+
+  const { finance } = state;
+  const now = new Date();
+  const ym = now.getFullYear() + '-' + (now.getMonth() + 1).toString().padStart(2, '0');
+
+  const incomeEl = document.getElementById('ha-income-tags');
+  const expenseEl = document.getElementById('ha-expense-tags');
+  const totalIncomeEl = document.getElementById('ha-total-income');
+  const totalExpenseEl = document.getElementById('ha-total-expense');
+  const balanceEl = document.getElementById('ha-total-balance');
+  const resultEl = document.getElementById('ha-finance-result');
+  let delMode = { income: false, expense: false };
+
+  // 🔍 查找世界书文件
+  async function findHealthWorldFile() {
+    try {
+      const moduleWI = await import('/scripts/world-info.js');
+      const selected = moduleWI.selected_world_info || [];
+      for (const WI of selected) {
+        if (WI.includes('健康生活助手')) return WI;
+      }
+      toastr.warning('未找到 “健康生活助手” 世界书');
+      return null;
+    } catch (e) {
+      toastr.error('查找世界书异常: ' + e.message);
+      return null;
+    }
+  }
+
+  // 🧾 写入世界书
+  async function appendToWorldInfoFinance() {
+    try {
+      const fileId = await findHealthWorldFile();
+      if (!fileId) return;
+
+      const moduleWI = await import('/scripts/world-info.js');
+      const worldInfo = await moduleWI.loadWorldInfo(fileId);
+      const entries = worldInfo.entries || {};
+
+      let incomeUID = null, expenseUID = null;
+      for (const id in entries) {
+        const entry = entries[id];
+        const comment = entry.comment || '';
+        if (!entry.disable) {
+          if (comment.includes('收入') || entry.title === '收入') incomeUID = entry.uid;
+          if (comment.includes('支出') || entry.title === '支出') expenseUID = entry.uid;
+        }
+      }
+
+      if (!incomeUID && !expenseUID) {
+        toastr.info('未找到 “收入/支出” 条目，请在世界书中创建。');
+        return;
+      }
+
+      const all = ctx.extensionSettings[MODULE_NAME].finance.records || [];
+      const incomeList = all.filter(r => r.type === 'income').map((r,i)=>
+        `${i+1}. ${new Date(r.date).toLocaleString()} ${r.tag}${r.name?`(${r.name})`:''}：${r.value}元`
+      );
+      const expenseList = all.filter(r => r.type === 'expense').map((r,i)=>
+        `${i+1}. ${new Date(r.date).toLocaleString()} ${r.tag}${r.name?`(${r.name})`:''}：${r.value}元`
+      );
+
+      const ctxObj = globalThis.SillyTavern.getContext();
+      const setField = ctxObj.SlashCommandParser.commands['setentryfield'].callback;
+
+      if (incomeUID)
+        await setField({file:fileId, uid:incomeUID, field:'content'}, incomeList.join('\n'));
+      if (expenseUID)
+        await setField({file:fileId, uid:expenseUID, field:'content'}, expenseList.join('\n'));
+
+      toastr.success('世界书已同步 ✅');
+    } catch (e) {
+      toastr.error('写入世界书失败：' + e.message);
+    }
+  }
+
+  // 标签渲染与点击
+  function renderTags() {
+    function render(el, list, type) {
+      el.innerHTML = '';
+      list.forEach(tag => {
+        const btn = document.createElement('div');
+        btn.textContent = tag;
+        btn.style.cssText = 'padding:4px 8px;border:1px solid #aaa;border-radius:6px;cursor:pointer;background:#fff;';
+        btn.addEventListener('click', async () => {
+          if (delMode[type]) {
+            const idx = list.indexOf(tag);
+            if (idx >= 0) list.splice(idx, 1);
+            saveSettings();
+            renderTags();
+            toastr.info(`已删除${type === 'income' ? '收入' : '支出'}标签`);
+          } else {
+            const name = prompt('输入名称（可留空）', '');
+            const value = prompt('输入金额（元）', '');
+            if (!value || isNaN(parseFloat(value))) return toastr.warning('金额无效');
+            const rec = { type, tag, name: name || '', value: parseFloat(value), date: new Date().toISOString() };
+            finance.records.push(rec);
+            saveSettings();
+            await appendToWorldInfoFinance();
+            updateSummary();
+            toastr.success(`${type === 'income' ? '收入' : '支出'}记录已添加`);
+          }
+        });
+        el.appendChild(btn);
+      });
+    }
+    render(incomeEl, finance.incomeTags, 'income');
+    render(expenseEl, finance.expenseTags, 'expense');
+  }
+
+  function updateSummary() {
+    const monthRecords = finance.records.filter(r => r.date.startsWith(ym));
+    const totalIncome = monthRecords.filter(r => r.type === 'income').reduce((a, b) => a + b.value, 0);
+    const totalExpense = monthRecords.filter(r => r.type === 'expense').reduce((a, b) => a + b.value, 0);
+    totalIncomeEl.textContent = totalIncome.toFixed(2);
+    totalExpenseEl.textContent = totalExpense.toFixed(2);
+    balanceEl.textContent = (totalIncome - totalExpense).toFixed(2);
+  }
+
+  // 标签添加/删除
+  document.getElementById('ha-income-add').addEventListener('click', () => {
+    const v = document.getElementById('ha-income-input').value.trim();
+    if (v && !finance.incomeTags.includes(v)) {
+      finance.incomeTags.push(v);
+      saveSettings();
+      renderTags();
+      toastr.success('已添加收入标签');
+    }
+  });
+  document.getElementById('ha-expense-add').addEventListener('click', () => {
+    const v = document.getElementById('ha-expense-input').value.trim();
+    if (v && !finance.expenseTags.includes(v)) {
+      finance.expenseTags.push(v);
+      saveSettings();
+      renderTags();
+      toastr.success('已添加支出标签');
+    }
+  });
+  document.getElementById('ha-income-del').addEventListener('click', e => {
+    delMode.income = !delMode.income;
+    e.target.style.background = delMode.income ? '#f88' : '';
+    toastr.info(delMode.income ? '收入删除模式开启' : '收入删除模式关闭');
+  });
+  document.getElementById('ha-expense-del').addEventListener('click', e => {
+    delMode.expense = !delMode.expense;
+    e.target.style.background = delMode.expense ? '#f88' : '';
+    toastr.info(delMode.expense ? '支出删除模式开启' : '支出删除模式关闭');
+  });
+
+  // 分析
+  document.getElementById('ha-income-analysis').addEventListener('click', () => {
+    const monthRecords = finance.records.filter(r => r.type === 'income' && r.date.startsWith(ym));
+    const byTag = {};
+    monthRecords.forEach(r => (byTag[r.tag] = (byTag[r.tag] || 0) + r.value));
+    const sorted = Object.entries(byTag).sort((a, b) => b[1] - a[1]);
+    resultEl.innerText = '当月收入分析：\n' + sorted.map(([t, v]) => `${t}: ${v.toFixed(2)}元`).join('\n');
+  });
+  document.getElementById('ha-expense-analysis').addEventListener('click', () => {
+    const monthRecords = finance.records.filter(r => r.type === 'expense' && r.date.startsWith(ym));
+    const byTag = {};
+    monthRecords.forEach(r => (byTag[r.tag] = (byTag[r.tag] || 0) + r.value));
+    const sorted = Object.entries(byTag).sort((a, b) => b[1] - a[1]);
+    resultEl.innerText = '当月支出分析：\n' + sorted.map(([t, v]) => `${t}: ${v.toFixed(2)}元`).join('\n');
+  });
+
+  // 收支明细
+  document.getElementById('ha-detail').addEventListener('click', () => {
+    const sorted = [...finance.records].sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (sorted.length === 0) {
+      resultEl.innerText = '暂无收支记录。';
+      return;
+    }
+    resultEl.innerHTML = '';
+    sorted.forEach((r, idx) => {
+      const div = document.createElement('div');
+      div.style.cssText = 'border-bottom:1px solid #ddd;padding:4px 0;display:flex;justify-content:space-between;align-items:center;';
+      const text = document.createElement('span');
+      text.textContent = `${new Date(r.date).toLocaleString()} [${r.type === 'income' ? '收入' : '支出'}] ${r.tag}${r.name ? `(${r.name})` : ''}：${r.value}元`;
+      const tools = document.createElement('div');
+      const edit = document.createElement('button');
+      edit.textContent = '✏️';
+      edit.style.cssText = 'margin-right:6px;cursor:pointer;';
+      const del = document.createElement('button');
+      del.textContent = '🗑️';
+      del.style.cssText = 'cursor:pointer;';
+      edit.addEventListener('click', async () => {
+        const newName = prompt('修改名称（可留空）', r.name);
+        const newVal = prompt('修改金额（元）', r.value);
+        if (!newVal || isNaN(parseFloat(newVal))) return toastr.warning('金额无效');
+        r.name = newName || '';
+        r.value = parseFloat(newVal);
+        saveSettings();
+        await appendToWorldInfoFinance();
+        updateSummary();
+        toastr.success('记录已更新');
+        document.getElementById('ha-detail').click();
+      });
+      del.addEventListener('click', async () => {
+        if (!confirm('确认删除该记录？')) return;
+        finance.records.splice(idx, 1);
+        saveSettings();
+        await appendToWorldInfoFinance();
+        updateSummary();
+        toastr.info('记录已删除');
+        document.getElementById('ha-detail').click();
+      });
+      tools.append(edit, del);
+      div.append(text, tools);
+      resultEl.appendChild(div);
+    });
+  });
+
+  renderTags();
+  updateSummary();
 }
 
       async function showWishes() {
