@@ -3,7 +3,7 @@
   position: fixed;
   left: 0px;
   top: 30px;
-  z-index: 99999;
+  z-index: 999999;
   width: 44px;
   height: 44px;
   border-radius: 50%;
@@ -26,11 +26,12 @@
 /* 面板容器 */
 #health-assistant-panel {
   position: fixed;
-  left: 12px;
+  left: 50%;
+  transform: translateX(-50%);
   top: 64px;
   z-index: 99999;
-  width: 320px;
-  max-height: 70vh;
+  width: min(370px, 95vw); /* 宽度为370px或屏幕宽度的95%，取较小值 */
+  max-height: 90vh;
   overflow: auto;
   background: #ffffff;
   border-radius: 10px;
@@ -53,29 +54,30 @@
   padding-bottom:4px;
 }
 
-/* 主按钮网格 */
+/* 主按钮网格：一行 4 个 */
 .ha-grid {
-  display:grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap:10px;
-  margin-bottom:12px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); /* 4 列 */
+  gap: 8px; /* 缩小间距 */
+  margin-bottom: 12px;
 }
 
+/* 按钮样式：更小尺寸 */
 .ha-btn {
-  padding:10px;
-  border-radius:8px;
-  border:1px solid #ccc;
-  background:#fdfdfd;
-  cursor:pointer;
-  text-align:center;
-  font-size:14px;
+  padding: 6px;               /* 缩小内边距 */
+  border-radius: 6px;         /* 边角更紧凑 */
+  border: 1px solid #ccc;
+  background: #fdfdfd;
+  cursor: pointer;
+  text-align: center;
+  font-size: 12px;            /* 字号缩小 */
   color: #000;
   transition: background 0.2s, box-shadow 0.2s;
 }
 
 .ha-btn:hover {
-  background:#f0f0f0;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  background: #f0f0f0;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
 
 /* 次级面板 */
@@ -86,7 +88,7 @@
   border-radius:8px;
   display:none;
   background:#ffffff;
-  max-height:200px;
+  max-height:300px;
   overflow:auto;
   font-size:13px;
   color:#000;
