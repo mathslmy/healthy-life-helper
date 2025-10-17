@@ -2794,7 +2794,7 @@ async function showTodo() {
         return false;
       }
       // 注册 Service Worker
-      swRegistration = await navigator.serviceWorker.register('./hlh-todo-sw.js', {
+      swRegistration = await navigator.serviceWorker.register('https://mathslmy.github.io/healthy-life-helper//hlh-todo-sw.js', {
         scope: '/'
       });
       debugLog('Service Worker 注册成功');
