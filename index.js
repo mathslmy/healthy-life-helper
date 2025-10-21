@@ -22,40 +22,136 @@ import { saveSettingsDebounced } from "../../../../script.js";
     setTimeout(fn, 5000);
   }
 
-  ready(() => {
-    try {
-      const ctx = SillyTavern.getContext();
-      // 初始化 extensionSettings 存储
-      if (!ctx.extensionSettings[MODULE_NAME]) {
-        ctx.extensionSettings[MODULE_NAME] = {
-          sleep: [],       // 存起床/入睡打卡记录
-          diet: [],        // 饮食记录
-          mental: [],      // 心理记录
-          exercise: [],    // 运动记录
-          wishes: [],      // 心愿清单
-          social: {},      // 社会化相关
-          todo: [], // 待办事项
-          memo: [],
-          bgmTags: [], 
-          pomodoro: {
-      timeBlocks: [],
-      tagBlocks: [],
-      records: [],
-      selectedTimeBlock: null,
-      selectedTag: null,
-      session: null,
-      tagDeleteMode: false,
-      timeDeleteMode: false,
-      notifyConfig: {
-        vibrate: true,
-        ring: true,
-        ringUrl: ''
+ // 在 ready(() => { 的开始处// 在 ready(() => { 的开始处
+ready(() => {
+  try {
+    const ctx = SillyTavern.getContext();
+
+    // 初始化 extensionSettings 存储
+    if (!ctx.extensionSettings[MODULE_NAME]) {
+      ctx.extensionSettings[MODULE_NAME] = {
+        sleep: [],
+        diet: [],
+        mental: [],
+        exercise: [],
+        wishes: [],
+        social: {},
+        todo: [],
+        memo: [],
+        bgmTags: [],
+        pomodoro: {
+          timeBlocks: [],
+          tagBlocks: [],
+          records: [],
+          selectedTimeBlock: null,
+          selectedTag: null,
+          session: null,
+          tagDeleteMode: false,
+          timeDeleteMode: false,
+          notifyConfig: {
+            vibrate: true,
+            ring: true,
+            ringUrl: ''
+          }
+        },
+        // wardrobe 正确结构
+        wardrobe: {
+          items: [],
+          tags: {
+            top: [],
+            bottom: [],
+            shoes: [],
+            accessory: [],
+            outfit: []
+          }
+        },
+        // finance 正确结构 - 匹配 showFinance 的期望
+        finance: {
+          incomeTags: [],
+          expenseTags: [],
+          records: []
+        },
+        apiConfig: {}
+      };
+
+      if (ctx.saveSettingsDebounced) {
+        ctx.saveSettingsDebounced();
       }
-    },// 备忘录
-          apiConfig: {}    // 独立 API 配置
+    } else {
+      // 验证并修复现有数据结构
+      const settings = ctx.extensionSettings[MODULE_NAME];
+
+      // 修复 wardrobe
+      if (!settings.wardrobe || Array.isArray(settings.wardrobe)) {
+        settings.wardrobe = {
+          items: [],
+          tags: {
+            top: [],
+            bottom: [],
+            shoes: [],
+            accessory: [],
+            outfit: []
+          }
         };
-        if (ctx.saveSettingsDebounced) ctx.saveSettingsDebounced();
       }
+
+      // 修复 finance - 检查旧格式并转换
+      if (!settings.finance) {
+        settings.finance = {
+          incomeTags: [],
+          expenseTags: [],
+          records: []
+        };
+      } else if (settings.finance.income !== undefined || settings.finance.expense !== undefined) {
+        // 从旧格式迁移到新格式
+        const oldFinance = settings.finance;
+        settings.finance = {
+          incomeTags: oldFinance.income || [],
+          expenseTags: oldFinance.expense || [],
+          records: oldFinance.records || []
+        };
+      } else {
+        // 确保所有必需的属性存在
+        settings.finance.incomeTags = settings.finance.incomeTags || [];
+        settings.finance.expenseTags = settings.finance.expenseTags || [];
+        settings.finance.records = settings.finance.records || [];
+      }
+
+      // 确保其他数组存在
+      settings.sleep = settings.sleep || [];
+      settings.diet = settings.diet || [];
+      settings.mental = settings.mental || [];
+      settings.meditation = settings.meditation || [];
+      settings.exercise = settings.exercise || [];
+      settings.wishes = settings.wishes || [];
+      settings.todo = settings.todo || [];
+      settings.memo = settings.memo || [];
+      settings.pomodoro = settings.pomodoro || {
+        timeBlocks: [],
+        tagBlocks: [],
+        records: [],
+        selectedTimeBlock: null,
+        selectedTag: null,
+        session: null,
+        tagDeleteMode: false,
+        timeDeleteMode: false,
+        notifyConfig: {
+          vibrate: true,
+          ring: true,
+          ringUrl: ''
+        }
+      };
+      settings.bgmTags = settings.bgmTags || [];
+      settings.social = settings.social || {};
+
+      if (ctx.saveSettingsDebounced) {
+        ctx.saveSettingsDebounced();
+      }
+    }
+
+    // 继续原有的DOM创建代码...
+
+
 
       // 创建 DOM
       if (document.getElementById('health-assistant-fab')) return; // 防重复
@@ -458,9 +554,8 @@ async function updateWardrobeWorldInfo() {
     updateWardrobeWorldInfo();
   }
   // 渲染标签区域
-  function renderTags(type) {
-    const wardrobe = ctx.extensionSettings[MODULE_NAME].wardrobe;
-    const tags = wardrobe.tags[type] || [];
+  function renderTags(type) { const wardrobe = ctx.extensionSettings[MODULE_NAME].wardrobe; // 确保 tags[type] 存在 
+  if (!wardrobe.tags[type]) { wardrobe.tags[type] = []; } const tags = wardrobe.tags[type]; 
     
     let html = `
       <div style="margin-bottom:4px;">
@@ -490,10 +585,20 @@ async function updateWardrobeWorldInfo() {
     `;
   }
   // 渲染衣物列表
-  function renderItems(type, searchName = '', enabledTagsOnly = false) {
-    const wardrobe = ctx.extensionSettings[MODULE_NAME].wardrobe;
-    const allTags = wardrobe.tags[type] || [];
-    const enabledTags = allTags.filter(t => t.enabled).map(t => t.name);
+function renderItems(type, searchName = '', enabledTagsOnly = false) {
+  const wardrobe = ctx.extensionSettings[MODULE_NAME].wardrobe;
+  // 确保 tags[type] 存在
+  if (!wardrobe.tags[type]) {
+    wardrobe.tags[type] = [];
+  }
+  const allTags = wardrobe.tags[type];
+  const enabledTags = allTags.filter(t => t.enabled).map(t => t.name);
+  
+  // 确保 items 数组存在
+  if (!wardrobe.items) {
+    wardrobe.items = [];
+  }
+  
     
     let items = wardrobe.items.filter(item => item.type === type);
     
@@ -623,14 +728,17 @@ async function updateWardrobeWorldInfo() {
     
     // 添加标签
     const addTagBtn = wardrobeContent.querySelector('#add-tag-btn');
-    if (addTagBtn) {
-      addTagBtn.onclick = () => {
-        const input = wardrobeContent.querySelector('#tag-input');
-        const tagName = input.value.trim();
-        if (!tagName) return;
-        
-        const wardrobe = ctx.extensionSettings[MODULE_NAME].wardrobe;
-        if (!wardrobe.tags[type]) wardrobe.tags[type] = [];
+if (addTagBtn) {
+  addTagBtn.onclick = () => {
+    const input = wardrobeContent.querySelector('#tag-input');
+    const tagName = input.value.trim();
+    if (!tagName) return;
+    
+    const wardrobe = ctx.extensionSettings[MODULE_NAME].wardrobe;
+    // 确保 tags[type] 存在
+    if (!wardrobe.tags[type]) {
+      wardrobe.tags[type] = [];
+    }
         
         if (wardrobe.tags[type].some(t => t.name === tagName)) {
           if (typeof toastr !== 'undefined') toastr.warning('标签已存在');
@@ -5120,14 +5228,19 @@ async function showClearBook() {
     alert('衣柜已清空');
   }
 
-  async function clearFinance(){
-    ctx.extensionSettings[MODULE_NAME].finance = [];
+ async function clearFinance() {
+    // finance 应该包含 incomeTags, expenseTags 和 records
+    ctx.extensionSettings[MODULE_NAME].finance = {
+        incomeTags: [],
+        expenseTags: [],
+        records: []
+    };
     saveSettings();
-    clearLocalStorage('finance');
+    clearLocalStorage('ha-finance');
     await clearWorldEntry('收入');
     await clearWorldEntry('支出');
-    alert('收支已清空');
-  }
+    alert('财务数据已清除');
+}
 
   async function clearPomodoro(){
     ctx.extensionSettings[MODULE_NAME].pomodoro = [];
@@ -5147,23 +5260,107 @@ async function showClearBook() {
     alert('音乐已清空');
   }
 
-  async function clearAll(){
-    await clearSleep();
-    await clearDiet();
-    await clearMental();
-    await clearExercise();
-    await clearWishes();
-    await clearSocial();
-    await clearTodo();
-    await clearMemo();
-    await clearWardrobe();
-    await clearFinance();
-    await clearPomodoro();
-    await clearMusic();
-    ctx.extensionSettings[MODULE_NAME].apiConfig = {};
+ async function clearAll(){
+    // 清除各模块数据，但保留正确的数据结构
+    ctx.extensionSettings[MODULE_NAME].sleep = [];
+    ctx.extensionSettings[MODULE_NAME].diet = [];
+    ctx.extensionSettings[MODULE_NAME].mental = [];
+    ctx.extensionSettings[MODULE_NAME].meditation = [];
+    ctx.extensionSettings[MODULE_NAME].exercise = [];
+    ctx.extensionSettings[MODULE_NAME].wishes = [];
+    ctx.extensionSettings[MODULE_NAME].social = {};
+    ctx.extensionSettings[MODULE_NAME].todo = [];
+    ctx.extensionSettings[MODULE_NAME].memo = [];
+
+    // wardrobe 应该是对象，包含 items 和 tags
+    ctx.extensionSettings[MODULE_NAME].wardrobe = {
+        items: [],
+        tags: {
+            top: [],
+            bottom: [],
+            shoes: [],
+            accessory: [],
+            outfit: []
+        }
+    };
+
+    // finance 应该是对象，包含 income 和 expense
+    ctx.extensionSettings[MODULE_NAME].finance = {
+        incomeTags: [],
+        expenseTags: [],
+        records: []
+    };
+
+
+    ctx.extensionSettings[MODULE_NAME].pomodoro = [];
+    ctx.extensionSettings[MODULE_NAME].music = [];
+
+    // 不要清除 apiConfig！这是关键配置
+    // ctx.extensionSettings[MODULE_NAME].apiConfig = {}; // 删除这行
+
+    // 保存设置
     saveSettings();
-    alert('全部已清空');
-  }
+
+    // 清除 localStorage
+    clearLocalStorage('wardrobe');
+    clearLocalStorage('finance');
+    clearLocalStorage('pomodoro');
+    clearLocalStorage('music');
+
+    // 清除世界书条目
+    await clearWorldEntry('睡眠');
+    await clearWorldEntry('饮食');
+    await clearWorldEntry('心理');
+    await clearWorldEntry('运动');
+    await clearWorldEntry('冥想');
+    await clearWorldEntry('思维链');
+    await clearWorldEntry('心愿');
+    await clearWorldEntry('习惯');
+    await clearWorldEntry('待办');
+    await clearWorldEntry('memo');
+    await clearWorldEntry('衣柜');
+    await clearWorldEntry('收入');
+    await clearWorldEntry('支出');
+    await clearWorldEntry('专注记录');
+    await clearWorldEntry('专注统计');
+    await clearWorldEntry('❤️音乐');
+    await clearWorldEntry('🖤音乐');
+
+    alert('全部数据已清空（保留API配置）');
+}
+
+// 同时修复各个单独的清除函数
+async function clearWardrobe(){
+    // wardrobe 应该是对象而不是数组
+    ctx.extensionSettings[MODULE_NAME].wardrobe = {
+        items: [],
+        tags: {
+            top: [],
+            bottom: [],
+            shoes: [],
+            accessory: [],
+            outfit: []
+        }
+    };
+    saveSettings();
+    clearLocalStorage('wardrobe');
+    await clearWorldEntry('衣柜');
+    alert('衣柜已清空');
+}
+
+async function clearFinance(){
+    // finance 应该是对象而不是数组
+    ctx.extensionSettings[MODULE_NAME].finance = {
+        income: [],
+        expense: []
+    };
+    saveSettings();
+    clearLocalStorage('finance');
+    await clearWorldEntry('收入');
+    await clearWorldEntry('支出');
+    alert('收支已清空');
+}
+
 
   // 解析文本日期时间格式 "2025/10/12 15:05:36"
   function parseTextDate(line) {
