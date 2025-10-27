@@ -26,7 +26,6 @@ import { saveSettingsDebounced } from "../../../../script.js";
 ready(() => {
   try {
     const ctx = SillyTavern.getContext();
-
     // 初始化 extensionSettings 存储
     if (!ctx.extensionSettings[MODULE_NAME]) {
       ctx.extensionSettings[MODULE_NAME] = {
@@ -73,14 +72,12 @@ ready(() => {
         },
         apiConfig: {}
       };
-
       if (ctx.saveSettingsDebounced) {
         ctx.saveSettingsDebounced();
       }
     } else {
       // 验证并修复现有数据结构
       const settings = ctx.extensionSettings[MODULE_NAME];
-
       // 修复 wardrobe
       if (!settings.wardrobe || Array.isArray(settings.wardrobe)) {
         settings.wardrobe = {
@@ -94,7 +91,6 @@ ready(() => {
           }
         };
       }
-
       // 修复 finance - 检查旧格式并转换
       if (!settings.finance) {
         settings.finance = {
@@ -116,7 +112,37 @@ ready(() => {
         settings.finance.expenseTags = settings.finance.expenseTags || [];
         settings.finance.records = settings.finance.records || [];
       }
-
+      // 修复 pomodoro - 检查旧格式并转换
+      if (!settings.pomodoro || Array.isArray(settings.pomodoro)) {
+        const oldRecords = Array.isArray(settings.pomodoro) ? settings.pomodoro : [];
+        settings.pomodoro = {
+          timeBlocks: [],
+          tagBlocks: [],
+          records: oldRecords,
+          selectedTimeBlock: null,
+          selectedTag: null,
+          session: null,
+          tagDeleteMode: false,
+          timeDeleteMode: false,
+          notifyConfig: {
+            vibrate: true,
+            ring: true,
+            ringUrl: ''
+          }
+        };
+      } else {
+        // 确保所有必需的属性存在
+        settings.pomodoro.timeBlocks = settings.pomodoro.timeBlocks || [];
+        settings.pomodoro.tagBlocks = settings.pomodoro.tagBlocks || [];
+        settings.pomodoro.records = settings.pomodoro.records || [];
+        if (!settings.pomodoro.notifyConfig) {
+          settings.pomodoro.notifyConfig = {
+            vibrate: true,
+            ring: true,
+            ringUrl: ''
+          };
+        }
+      }
       // 确保其他数组存在
       settings.sleep = settings.sleep || [];
       settings.diet = settings.diet || [];
@@ -126,35 +152,15 @@ ready(() => {
       settings.wishes = settings.wishes || [];
       settings.todo = settings.todo || [];
       settings.memo = settings.memo || [];
-      settings.pomodoro = settings.pomodoro || {
-        timeBlocks: [],
-        tagBlocks: [],
-        records: [],
-        selectedTimeBlock: null,
-        selectedTag: null,
-        session: null,
-        tagDeleteMode: false,
-        timeDeleteMode: false,
-        notifyConfig: {
-          vibrate: true,
-          ring: true,
-          ringUrl: ''
-        }
-      };
       settings.bgmTags = settings.bgmTags || [];
       settings.social = settings.social || {};
-
       if (ctx.saveSettingsDebounced) {
         ctx.saveSettingsDebounced();
       }
     }
-
     // 继续原有的DOM创建代码...
-
-
-
-      // 创建 DOM
-      if (document.getElementById('health-assistant-fab')) return; // 防重复
+    // 创建 DOM
+    if (document.getElementById('health-assistant-fab')) return;
 
       const fab = document.createElement('div');
 fab.id = 'health-assistant-fab';
@@ -5243,7 +5249,22 @@ async function showClearBook() {
 }
 
   async function clearPomodoro(){
-    ctx.extensionSettings[MODULE_NAME].pomodoro = [];
+    // pomodoro 应该是对象而不是数组
+    ctx.extensionSettings[MODULE_NAME].pomodoro = {
+      timeBlocks: [],
+      tagBlocks: [],
+      records: [],
+      selectedTimeBlock: null,
+      selectedTag: null,
+      session: null,
+      tagDeleteMode: false,
+      timeDeleteMode: false,
+      notifyConfig: {
+        vibrate: true,
+        ring: true,
+        ringUrl: ''
+      }
+    };
     saveSettings();
     clearLocalStorage('pomodoro');
     await clearWorldEntry('专注记录');
