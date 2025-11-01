@@ -32,6 +32,9 @@ ready(() => {
         sleep: [],
         diet: [],
         mental: [],
+        meditation: [],
+        thoughtChains: [],
+        confessions: [],
         exercise: [],
         wishes: [],
         social: {},
@@ -78,6 +81,7 @@ ready(() => {
     } else {
       // 验证并修复现有数据结构
       const settings = ctx.extensionSettings[MODULE_NAME];
+      
       // 修复 wardrobe
       if (!settings.wardrobe || Array.isArray(settings.wardrobe)) {
         settings.wardrobe = {
@@ -91,6 +95,7 @@ ready(() => {
           }
         };
       }
+      
       // 修复 finance - 检查旧格式并转换
       if (!settings.finance) {
         settings.finance = {
@@ -112,6 +117,7 @@ ready(() => {
         settings.finance.expenseTags = settings.finance.expenseTags || [];
         settings.finance.records = settings.finance.records || [];
       }
+      
       // 修复 pomodoro - 检查旧格式并转换
       if (!settings.pomodoro || Array.isArray(settings.pomodoro)) {
         const oldRecords = Array.isArray(settings.pomodoro) ? settings.pomodoro : [];
@@ -143,17 +149,94 @@ ready(() => {
           };
         }
       }
+      
       // 确保其他数组存在
       settings.sleep = settings.sleep || [];
       settings.diet = settings.diet || [];
       settings.mental = settings.mental || [];
       settings.meditation = settings.meditation || [];
+      settings.thoughtChains = settings.thoughtChains || [];
+      settings.confessions = settings.confessions || [];
       settings.exercise = settings.exercise || [];
       settings.wishes = settings.wishes || [];
       settings.todo = settings.todo || [];
       settings.memo = settings.memo || [];
       settings.bgmTags = settings.bgmTags || [];
       settings.social = settings.social || {};
+      
+      // 迁移旧格式的心理健康数据到新格式(带enabled字段)
+      if (settings.mental && settings.mental.length > 0) {
+        settings.mental = settings.mental.map(item => {
+          if (typeof item === 'string') {
+            return {
+              text: item,
+              ts: new Date().toISOString(),
+              enabled: true
+            };
+          } else if (item.enabled === undefined) {
+            return {
+              ...item,
+              enabled: true
+            };
+          }
+          return item;
+        });
+      }
+      
+      if (settings.meditation && settings.meditation.length > 0) {
+        settings.meditation = settings.meditation.map(item => {
+          if (typeof item === 'string') {
+            return {
+              text: item,
+              ts: new Date().toISOString(),
+              enabled: true
+            };
+          } else if (item.enabled === undefined) {
+            return {
+              ...item,
+              enabled: true
+            };
+          }
+          return item;
+        });
+      }
+      
+      if (settings.thoughtChains && settings.thoughtChains.length > 0) {
+        settings.thoughtChains = settings.thoughtChains.map(item => {
+          if (typeof item === 'string') {
+            return {
+              text: item,
+              ts: new Date().toISOString(),
+              enabled: true
+            };
+          } else if (item.enabled === undefined) {
+            return {
+              ...item,
+              enabled: true
+            };
+          }
+          return item;
+        });
+      }
+      
+      if (settings.confessions && settings.confessions.length > 0) {
+        settings.confessions = settings.confessions.map(item => {
+          if (typeof item === 'string') {
+            return {
+              text: item,
+              ts: new Date().toISOString(),
+              enabled: true
+            };
+          } else if (item.enabled === undefined) {
+            return {
+              ...item,
+              enabled: true
+            };
+          }
+          return item;
+        });
+      }
+      
       if (ctx.saveSettingsDebounced) {
         ctx.saveSettingsDebounced();
       }
@@ -2031,7 +2114,7 @@ async function showPomodoro() {
       
       
       
-      async function showRoutine(){  
+   async function showRoutine(){  
   const container = content;  
   container.style.display = 'block';  
   container.innerHTML = `  
@@ -2039,6 +2122,10 @@ async function showPomodoro() {
     <div style="display:flex;gap:8px;margin-bottom:6px">  
       <button id="ha-wake" class="ha-btn" style="flex:1">起床打卡</button>  
       <button id="ha-sleep" class="ha-btn" style="flex:1">入睡打卡</button>  
+    </div>  
+    <div style="display:flex;gap:8px;margin-bottom:6px">  
+      <button id="ha-wake-manual" class="ha-btn" style="flex:1">手动起床</button>  
+      <button id="ha-sleep-manual" class="ha-btn" style="flex:1">手动入睡</button>  
     </div>  
     <div style="display:flex;gap:8px;margin-bottom:6px">  
       <button id="ha-sleep-help" class="ha-btn" style="flex:1">助眠</button>  
@@ -2056,216 +2143,248 @@ async function showPomodoro() {
        overflow:auto;
        display:block;
      ">
-</div></div>
+    </div>
     <div id="ha-routine-log" class="ha-small"></div>  
-    <div id="ha-debug" style="margin-top:8px;padding:6px;border:1px solid #ddd;font-size:12px;  
-      max-height:160px;overflow:auto;background:#fafafa;white-space:pre-wrap"></div>  
   `;  
-
   const wakeBtn = document.getElementById('ha-wake');  
   const sleepBtn = document.getElementById('ha-sleep');  
+  const wakeManualBtn = document.getElementById('ha-wake-manual');  
+  const sleepManualBtn = document.getElementById('ha-sleep-manual');  
   const logEl = document.getElementById('ha-routine-log');  
-  const debugEl = document.getElementById('ha-debug');  
-  const subPanel = document.getElementById('ha-subpanel');  // 预留固定面板
-
-  function debugLog(...args){  
-    const ts = new Date().toLocaleTimeString();  
-    const msg = `[${ts}] ` + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');  
-    debugEl.innerText += msg + "\n";  
-    debugEl.scrollTop = debugEl.scrollHeight;  
-    console.log('[健康生活助手]', ...args);  
-  }  
-
+  const subPanel = document.getElementById('ha-subpanel');
   async function findHealthWorldFile() {  
     try {  
       const moduleWI = await import('/scripts/world-info.js');  
       const selected = moduleWI.selected_world_info || [];  
-      debugLog('selected_world_info:', selected);  
+      console.log('[健康生活助手] selected_world_info:', selected);
       for (const WI of selected) {  
         if (WI.includes('健康生活助手')) {  
-          debugLog('匹配到世界书文件:', WI);  
+          toastr.info('匹配到世界书文件: ' + WI, '世界书');
           return WI;  
         }  
       }  
-      debugLog('未找到名为 "健康生活助手" 的世界书文件');  
+      toastr.warning('未找到名为 "健康生活助手" 的世界书文件', '世界书');
       return null;  
     } catch (e) {  
-      debugLog('findHealthWorldFile 异常:', e.message || e);  
+      toastr.error('查找世界书文件异常: ' + (e.message || e), '错误');
       return null;  
     }  
   }  
-
   async function appendToWorldInfoSleepLog(type, label){  
     try {  
       const fileId = await findHealthWorldFile();  
-      if (!fileId) { debugLog('写入世界书: 未找到世界书文件，跳过写入'); return; }  
-
+      if (!fileId) { 
+        toastr.warning('未找到世界书文件，跳过写入', '写入世界书'); 
+        return; 
+      }  
       const moduleWI = await import('/scripts/world-info.js');  
       const worldInfo = await moduleWI.loadWorldInfo(fileId);  
       const entries = worldInfo.entries || {};  
-      debugLog('loadWorldInfo entries count:', Object.keys(entries).length);  
-
       let targetUID = null;  
       for (const id in entries) {  
         const entry = entries[id];  
         const comment = entry.comment || '';  
         if (!entry.disable && (comment.includes('睡眠') || comment.includes('健康生活助手/睡眠') || entry.title === '睡眠' )) {  
           targetUID = entry.uid;  
-          debugLog('找到睡眠 entry: uid=', targetUID, 'comment=', comment);  
           break;  
         }  
       }  
-
       if (!targetUID) {  
-        debugLog('未找到睡眠 entry（未创建）。写入被跳过。');  
+        toastr.warning('未找到睡眠 entry（未创建），写入被跳过', '世界书');
         return;  
       }  
-
       const recLine = `${type === 'wake' ? '起床' : '入睡'} 打卡 @ ${label}`;  
       const existing = entries[targetUID].content || '';  
       const newContent = existing + (existing ? '\n' : '') + recLine;  
-
-      debugLog('准备写入 world entry:', { file: fileId, uid: targetUID, newLine: recLine });  
       await globalThis.SillyTavern.getContext()  
         .SlashCommandParser.commands['setentryfield']  
         .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);  
-
-      debugLog('写入世界书成功:', recLine);  
+      toastr.success('已写入世界书: ' + recLine, '写入成功');
     } catch (e) {  
-      debugLog('写入世界书失败:', e.message || e);  
+      toastr.error('写入世界书失败: ' + (e.message || e), '错误');
     }  
   }  
-
-  function appendSleepRecord(type){  
-    const now = new Date();  
+  function appendSleepRecord(type, customTime = null){  
+    const now = customTime || new Date();  
     const rec = { type, ts: now.toISOString(), label: now.toLocaleString() };  
     ctx.extensionSettings[MODULE_NAME].sleep.push(rec);  
     saveSettings();  
     const text = `${type === 'wake' ? '起床' : '入睡'} 打卡：\n${now.toLocaleString()}`;  
-    alert(text);  
+    toastr.success(text, '打卡成功');
     renderLog();  
     appendToWorldInfoSleepLog(type, now.toLocaleString());  
   }  
-
+  // 手动选择时间的函数
+  function openManualTimeDialog(type) {
+    const typeText = type === 'wake' ? '起床' : '入睡';
+    const dialog = document.createElement('div');
+    
+    dialog.innerHTML = `
+      <div style="background:#fff;padding:8px;border-radius:6px;box-shadow:0 1px 6px rgba(0,0,0,0.12);max-width:320px;margin:auto;">
+        <div style="font-weight:600;margin-bottom:6px;">手动${typeText}打卡</div>
+        <label style="font-size:13px">日期:</label><br>
+        <input id="manual-sleep-date" type="date" style="width:100%;margin-bottom:6px;padding:4px;"><br>
+        <label style="font-size:13px">时间:</label><br>
+        <input id="manual-sleep-time" type="time" style="width:100%;margin-bottom:6px;padding:4px;"><br>
+        <div style="text-align:right;margin-top:8px;">
+          <button id="manual-sleep-ok" class="ha-btn">确定</button>
+          <button id="manual-sleep-cancel" class="ha-btn" style="margin-left:6px;">取消</button>
+        </div>
+      </div>
+    `;
+    
+    Object.assign(dialog.style, {
+      position: 'absolute',
+      top: '8px',
+      left: '8px',
+      right: '8px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 99999
+    });
+    
+    container.appendChild(dialog);
+    
+    // 设置默认值为当前时间
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.toTimeString().slice(0, 5);
+    dialog.querySelector('#manual-sleep-date').value = dateStr;
+    dialog.querySelector('#manual-sleep-time').value = timeStr;
+    
+    dialog.querySelector('#manual-sleep-cancel').onclick = () => dialog.remove();
+    dialog.querySelector('#manual-sleep-ok').onclick = () => {
+      const date = dialog.querySelector('#manual-sleep-date').value;
+      const time = dialog.querySelector('#manual-sleep-time').value;
+      
+      if (!date || !time) {
+        toastr.warning('请选择完整的日期和时间', '输入不完整');
+        return;
+      }
+      
+      const selectedDateTime = new Date(`${date}T${time}`);
+      
+      if (isNaN(selectedDateTime.getTime())) {
+        toastr.error('无效的日期时间', '错误');
+        return;
+      }
+      
+      appendSleepRecord(type, selectedDateTime);
+      dialog.remove();
+    };
+  }
   wakeBtn.addEventListener('click', () => appendSleepRecord('wake'));  
   sleepBtn.addEventListener('click', () => appendSleepRecord('sleep'));  
-
+  wakeManualBtn.addEventListener('click', () => openManualTimeDialog('wake'));
+  sleepManualBtn.addEventListener('click', () => openManualTimeDialog('sleep'));
   // 助眠按钮
-document.getElementById('ha-sleep-help').addEventListener('click', async () => {  
-  const api = ctx.extensionSettings[MODULE_NAME].apiConfig || {};  
-  subPanel.innerText = '正在获取助眠建议...';  
-  subPanel.scrollTop = subPanel.scrollHeight;  // 滚动到底部
-
-  if (!api.url) {  
-    subPanel.innerText = '未配置独立 API，默认提示：保持卧室安静、黑暗，避免咖啡因，睡前放松。';  
-    subPanel.scrollTop = subPanel.scrollHeight;  
-    debugLog('助眠调用: 未配置 API');  
-    return;  
-  }  
-
-  try {  
-    const endpoint = api.url.replace(/\/$/, '') + '/v1/chat/completions';  
-    debugLog('助眠调用: 请求将发送到', endpoint, 'model:', api.model);  
-    const res = await fetch(endpoint, {  
-      method: 'POST',  
-      headers: {  
-        'Content-Type': 'application/json',  
-        ...(api.key ? { 'Authorization': `Bearer ${api.key}` } : {})  
-      },  
-      body: JSON.stringify({  
-        model: api.model,  
-        messages: [{ role: 'system', content: '提供一些哄睡助眠措施帮user放下手机入眠。' }],  
-        max_tokens: 5000  
-      })  
-    });  
-    debugLog('助眠调用: HTTP 状态', res.status);  
-    if (!res.ok) throw new Error('HTTP ' + res.status);  
-    const data = await res.json();  
-    const text = data.choices?.[0]?.message?.content || (data.result || JSON.stringify(data));  
-    subPanel.innerText = text;  
-    subPanel.scrollTop = subPanel.scrollHeight;  
-    debugLog('助眠调用: 返回摘录', text.slice(0,200));  
-  } catch (e) {  
-    subPanel.innerText = 'API 请求失败：' + (e.message || e);  
-    subPanel.scrollTop = subPanel.scrollHeight;  
-    debugLog('助眠调用失败:', e.message || e);  
-  }  
-});  
-
-// 睡眠质量分析按钮
-document.getElementById('ha-sleep-analysis').addEventListener('click', async () => {  
-  subPanel.innerText = '正在分析睡眠质量...';  
-  subPanel.scrollTop = subPanel.scrollHeight;  
-
-  try {  
-    const fileId = await findHealthWorldFile();  
-    if (!fileId) { 
-      subPanel.innerText = '未找到世界书（健康生活助手.json）'; 
-      subPanel.scrollTop = subPanel.scrollHeight;  
-      debugLog('分析: 未找到世界书文件'); 
-      return; 
-    }  
-
-    const moduleWI = await import('/scripts/world-info.js');  
-    const worldInfo = await moduleWI.loadWorldInfo(fileId);  
-    const entries = worldInfo.entries || {};  
-    let targetContent = '';  
-    for (const id in entries) {  
-      const entry = entries[id];  
-      const comment = entry.comment || '';  
-      if (!entry.disable && (comment.includes('睡眠') || comment.includes('健康生活助手/睡眠') || entry.title === '睡眠')) {  
-        targetContent = entry.content || '';  
-        debugLog('分析: 找到睡眠 entry uid=', entry.uid);  
-        break;  
-      }  
-    }  
-
-    if (!targetContent) { 
-      subPanel.innerText = '世界书中未找到睡眠条目或内容为空'; 
-      subPanel.scrollTop = subPanel.scrollHeight;  
-      debugLog('分析: 睡眠条目为空'); 
-      return; 
-    }  
-
+  document.getElementById('ha-sleep-help').addEventListener('click', async () => {  
     const api = ctx.extensionSettings[MODULE_NAME].apiConfig || {};  
+    subPanel.innerText = '正在获取助眠建议...';  
+    subPanel.scrollTop = subPanel.scrollHeight;
     if (!api.url) {  
-      subPanel.innerText = '未配置独立 API，无法进行分析。';  
+      subPanel.innerText = '未配置独立 API，默认提示：保持卧室安静、黑暗，避免咖啡因，睡前放松。';  
       subPanel.scrollTop = subPanel.scrollHeight;  
-      debugLog('分析: 未配置 API');  
+      toastr.info('未配置 API，显示默认提示', '助眠');
       return;  
     }  
-
-    const endpoint = api.url.replace(/\/$/, '') + '/v1/chat/completions';  
-    debugLog('分析调用: 请求将发送到', endpoint, 'model:', api.model);  
-    const res = await fetch(endpoint, {  
-      method: 'POST',  
-      headers: {  
-        'Content-Type': 'application/json',  
-        ...(api.key ? { 'Authorization': `Bearer ${api.key}` } : {})  
-      },  
-      body: JSON.stringify({  
-        model: api.model,  
-        messages: [  
-          { role: 'system', content: '你是健康顾问，请分析用户的睡眠记录并给出改善建议。' },  
-          { role: 'user', content: targetContent }  
-        ],  
-        max_tokens: 5000 
-      })  
-    });  
-    debugLog('分析调用: HTTP 状态', res.status);  
-    if (!res.ok) throw new Error('HTTP ' + res.status);  
-    const data = await res.json();  
-    const text = data.choices?.[0]?.message?.content || JSON.stringify(data);  
-    subPanel.innerText = text;  
+    try {  
+      const endpoint = api.url.replace(/\/$/, '') + '/v1/chat/completions';  
+      toastr.info('正在请求助眠建议...', 'API 调用');
+      
+      const res = await fetch(endpoint, {  
+        method: 'POST',  
+        headers: {  
+          'Content-Type': 'application/json',  
+          ...(api.key ? { 'Authorization': `Bearer ${api.key}` } : {})  
+        },  
+        body: JSON.stringify({  
+          model: api.model,  
+          messages: [{ role: 'system', content: '提供一些哄睡助眠措施帮user放下手机入眠。' }],  
+          max_tokens: 5000  
+        })  
+      });  
+      
+      if (!res.ok) throw new Error('HTTP ' + res.status);  
+      const data = await res.json();  
+      const text = data.choices?.[0]?.message?.content || (data.result || JSON.stringify(data));  
+      subPanel.innerText = text;  
+      subPanel.scrollTop = subPanel.scrollHeight;  
+      toastr.success('助眠建议已生成', 'API 调用成功');
+    } catch (e) {  
+      subPanel.innerText = 'API 请求失败：' + (e.message || e);  
+      subPanel.scrollTop = subPanel.scrollHeight;  
+      toastr.error('助眠调用失败: ' + (e.message || e), 'API 错误');
+    }  
+  });  
+  // 睡眠质量分析按钮
+  document.getElementById('ha-sleep-analysis').addEventListener('click', async () => {  
+    subPanel.innerText = '正在分析睡眠质量...';  
     subPanel.scrollTop = subPanel.scrollHeight;  
-    debugLog('分析调用: 返回摘录', text.slice(0,200));  
-  } catch (e) {  
-    subPanel.innerText = '分析失败：' + (e.message || e);  
-    subPanel.scrollTop = subPanel.scrollHeight;  
-    debugLog('分析异常:', e.message || e);  
-  }  
-});
-
+    try {  
+      const fileId = await findHealthWorldFile();  
+      if (!fileId) { 
+        subPanel.innerText = '未找到世界书（健康生活助手.json）'; 
+        subPanel.scrollTop = subPanel.scrollHeight;  
+        return; 
+      }  
+      const moduleWI = await import('/scripts/world-info.js');  
+      const worldInfo = await moduleWI.loadWorldInfo(fileId);  
+      const entries = worldInfo.entries || {};  
+      let targetContent = '';  
+      for (const id in entries) {  
+        const entry = entries[id];  
+        const comment = entry.comment || '';  
+        if (!entry.disable && (comment.includes('睡眠') || comment.includes('健康生活助手/睡眠') || entry.title === '睡眠')) {  
+          targetContent = entry.content || '';  
+          break;  
+        }  
+      }  
+      if (!targetContent) { 
+        subPanel.innerText = '世界书中未找到睡眠条目或内容为空'; 
+        subPanel.scrollTop = subPanel.scrollHeight;  
+        toastr.warning('睡眠条目为空', '分析');
+        return; 
+      }  
+      const api = ctx.extensionSettings[MODULE_NAME].apiConfig || {};  
+      if (!api.url) {  
+        subPanel.innerText = '未配置独立 API，无法进行分析。';  
+        subPanel.scrollTop = subPanel.scrollHeight;  
+        toastr.warning('未配置 API', '分析');
+        return;  
+      }  
+      const endpoint = api.url.replace(/\/$/, '') + '/v1/chat/completions';  
+      toastr.info('正在分析睡眠质量...', 'API 调用');
+      
+      const res = await fetch(endpoint, {  
+        method: 'POST',  
+        headers: {  
+          'Content-Type': 'application/json',  
+          ...(api.key ? { 'Authorization': `Bearer ${api.key}` } : {})  
+        },  
+        body: JSON.stringify({  
+          model: api.model,  
+          messages: [  
+            { role: 'system', content: '你是健康顾问，请分析用户的睡眠记录并给出改善建议。' },  
+            { role: 'user', content: targetContent }  
+          ],  
+          max_tokens: 5000 
+        })  
+      });  
+      
+      if (!res.ok) throw new Error('HTTP ' + res.status);  
+      const data = await res.json();  
+      const text = data.choices?.[0]?.message?.content || JSON.stringify(data);  
+      subPanel.innerText = text;  
+      subPanel.scrollTop = subPanel.scrollHeight;  
+      toastr.success('睡眠质量分析完成', 'API 调用成功');
+    } catch (e) {  
+      subPanel.innerText = '分析失败：' + (e.message || e);  
+      subPanel.scrollTop = subPanel.scrollHeight;  
+      toastr.error('分析异常: ' + (e.message || e), '错误');
+    }  
+  });
   function renderLog(){  
     const arr = ctx.extensionSettings[MODULE_NAME].sleep || [];  
     logEl.innerText = `已记录 ${arr.length} 条（存储在扩展设置与世界书中）`;  
@@ -2438,7 +2557,7 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
   renderLog();
 }
 
- async function showMental() {
+async function showMental() {
     content.style.display = 'block';
     content.innerHTML = `<div style="font-weight:600;margin-bottom:6px">心理健康</div>
         <div style="margin-bottom:6px">
@@ -2447,7 +2566,12 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
             <button id="ha-thought-chain" class="ha-btn" style="margin-bottom:6px;margin-left:6px">思维链识别</button>
         </div>
         <div style="margin-bottom:6px">
-            <label style="display:block;font-size:12px;color:#666">正念冥想计时（分钟，0=即时指导）</label>
+            <button id="ha-confession" class="ha-btn" style="margin-bottom:6px">忏悔室</button>
+            <button id="ha-listen-confession" class="ha-btn" style="margin-bottom:6px;margin-left:6px">聆听忏悔</button>
+            <button id="ha-mental-stats" class="ha-btn" style="margin-bottom:6px;margin-left:6px">心理统计</button>
+        </div>
+        <div style="margin-bottom:6px">
+            <label style="display:block;font-size:12px;color:#666">正念冥想计时(分钟,0=即时指导)</label>
             <input id="ha-meditation-min" type="range" min="0" max="30" step="5" value="5" style="width:150px"/>
             <span id="ha-meditation-val">5</span> 分钟
             <span id="ha-medit-timer" style="margin-left:12px;color:#007acc;font-weight:600"></span>
@@ -2456,10 +2580,9 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
         </div>
         <div id="ha-mental-subpanel" style="margin-top:6px;padding:6px;border:1px solid #ddd;background:#f9f9f9;white-space:pre-wrap;min-height:60px;max-height:200px;overflow:auto;display:block;">
         </div>
-        <div id="ha-mental-log" class="ha-small"></div>
-        <div id="ha-mental-debug" style="margin-top:8px;padding:6px;border:1px solid #ddd;font-size:12px;max-height:160px;overflow:auto;background:#fafafa;white-space:pre-wrap"></div>`;
+        <div id="ha-mental-log" class="ha-small"></div>`;
+    
     const logEl = document.getElementById('ha-mental-log');
-    const debugEl = document.getElementById('ha-mental-debug');
     const subPanel = document.getElementById('ha-mental-subpanel');
     const slider = document.getElementById('ha-meditation-min');
     const sliderVal = document.getElementById('ha-meditation-val');
@@ -2468,100 +2591,56 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
     const btnStop = document.getElementById('ha-stop-medit');
     let timerId = null;
     let startTime = null;
-    let targetDuration = 0; // 分钟
+    let targetDuration = 0;
+    
     slider.addEventListener('input', () => {
         sliderVal.innerText = slider.value;
     });
-    function debugLog(...args) {
-        const ts = new Date().toLocaleTimeString();
-        const msg = `[${ts}] ` + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
-        debugEl.innerText += msg + "\n";
-        debugEl.scrollTop = debugEl.scrollHeight;
-        console.log('[健康生活助手]', ...args);
-    }
+    
     async function findHealthWorldFile() {
         try {
             const moduleWI = await import('/scripts/world-info.js');
             const selected = moduleWI.selected_world_info || [];
-            debugLog('selected_world_info:', selected);
             for (const WI of selected) {
                 if (WI.includes('健康生活助手')) {
-                    debugLog('匹配到世界书文件:', WI);
                     return WI;
                 }
             }
-            debugLog('未找到名为 "健康生活助手" 的世界书文件');
             return null;
         } catch (e) {
-            debugLog('findHealthWorldFile 异常:', e.message || e);
+            toastr.error('查找世界书文件失败: ' + e.message);
             return null;
         }
     }
-    async function appendToWorldInfoMentalLog(contentText) {
+    
+    // === 通用函数: 追加到世界书条目 ===
+    async function appendToWorldInfoEntry(keyword, contentText) {
         try {
             const fileId = await findHealthWorldFile();
             if (!fileId) {
-                debugLog('写入世界书: 未找到世界书文件，跳过写入');
+                toastr.warning('未找到世界书文件');
                 return;
             }
             const moduleWI = await import('/scripts/world-info.js');
             const worldInfo = await moduleWI.loadWorldInfo(fileId);
             const entries = worldInfo.entries || {};
-            debugLog('loadWorldInfo entries count:', Object.keys(entries).length);
             
             let targetUID = null;
             for (const id in entries) {
                 const entry = entries[id];
                 const comment = entry.comment || '';
-                if (!entry.disable && (comment.includes('心理') || entry.title === '心理')) {
+                if (!entry.disable && (comment.includes(keyword) || entry.title === keyword)) {
                     targetUID = entry.uid;
-                    debugLog('找到心理 entry: uid=', targetUID, 'comment=', comment);
                     break;
                 }
             }
             
             if (!targetUID) {
-                debugLog('未找到心理 entry（未创建），写入被跳过。');
+                toastr.warning(`未找到"${keyword}"条目`);
                 return;
             }
             
-            const recLine = `${new Date().toLocaleString()}：${contentText}`;
-            const existing = entries[targetUID].content || '';
-            const newContent = existing + (existing ? '\n' : '') + recLine;
-            
-            debugLog('准备写入 world entry:', { file: fileId, uid: targetUID, newLine: recLine });
-            await globalThis.SillyTavern.getContext()
-                .SlashCommandParser.commands['setentryfield']
-                .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
-            
-            debugLog('写入世界书成功:', recLine);
-        } catch (e) {
-            debugLog('写入世界书失败:', e.message || e);
-        }
-    }
-    // === 新增：写入冥想条目 ===
-    async function appendToWorldInfoMeditationLog(durationMinutes) {
-        try {
-            const fileId = await findHealthWorldFile();
-            if (!fileId) return;
-            
-            const moduleWI = await import('/scripts/world-info.js');
-            const worldInfo = await moduleWI.loadWorldInfo(fileId);
-            const entries = worldInfo.entries || {};
-            
-            let targetUID = null;
-            for (const id in entries) {
-                const entry = entries[id];
-                const comment = entry.comment || '';
-                if (!entry.disable && (comment.includes('冥想') || entry.title === '冥想')) {
-                    targetUID = entry.uid;
-                    break;
-                }
-            }
-            
-            if (!targetUID) return;
-            
-            const recLine = `${new Date().toLocaleString()}：本次冥想 ${durationMinutes} 分钟`;
+            const recLine = `${new Date().toLocaleString()}:${contentText}`;
             const existing = entries[targetUID].content || '';
             const newContent = existing + (existing ? '\n' : '') + recLine;
             
@@ -2569,248 +2648,536 @@ document.getElementById('ha-sleep-analysis').addEventListener('click', async () 
                 .SlashCommandParser.commands['setentryfield']
                 .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
             
-            debugLog('冥想记录写入成功:', recLine);
+            toastr.success(`已同步到世界书"${keyword}"条目`);
         } catch (e) {
-            debugLog('冥想写入失败:', e.message || e);
+            toastr.error(`写入世界书失败: ${e.message}`);
         }
     }
-    // === 新增：写入思维链条目 ===
-    async function appendToWorldInfoThoughtChain(thoughtText) {
+    
+    // === 从localStorage获取条目 ===
+    function getLocalStorageEntries(storageKey) {
+        const entries = ctx.extensionSettings[MODULE_NAME][storageKey] || [];
+        return entries.map((entry, index) => ({
+            text: entry.text || entry,
+            ts: entry.ts || '',
+            index: index,
+            enabled: entry.enabled !== false // 默认启用
+        }));
+    }
+    
+    // === 删除localStorage中的条目 ===
+    function deleteLocalStorageEntry(storageKey, index) {
+        if (!ctx.extensionSettings[MODULE_NAME][storageKey]) return;
+        ctx.extensionSettings[MODULE_NAME][storageKey].splice(index, 1);
+        saveSettings();
+    }
+    
+    // === 更新localStorage中条目的启用状态 ===
+    function updateLocalStorageEntryEnabled(storageKey, index, enabled) {
+        if (!ctx.extensionSettings[MODULE_NAME][storageKey]) return;
+        const entry = ctx.extensionSettings[MODULE_NAME][storageKey][index];
+        if (typeof entry === 'object') {
+            entry.enabled = enabled;
+        } else {
+            // 如果是旧格式的字符串,转换为对象
+            ctx.extensionSettings[MODULE_NAME][storageKey][index] = {
+                text: entry,
+                ts: new Date().toISOString(),
+                enabled: enabled
+            };
+        }
+        saveSettings();
+    }
+    
+    // === 编辑localStorage中的条目 ===
+    function editLocalStorageEntry(storageKey, index, newText) {
+        if (!ctx.extensionSettings[MODULE_NAME][storageKey]) return;
+        const entry = ctx.extensionSettings[MODULE_NAME][storageKey][index];
+        if (typeof entry === 'object') {
+            entry.text = newText;
+        } else {
+            ctx.extensionSettings[MODULE_NAME][storageKey][index] = {
+                text: newText,
+                ts: new Date().toISOString(),
+                enabled: true
+            };
+        }
+        saveSettings();
+    }
+    
+    // === 从世界书删除某行 ===
+    async function deleteLineFromWorldInfo(keyword, lineText) {
         try {
             const fileId = await findHealthWorldFile();
-            if (!fileId) return;
+            if (!fileId) return false;
             
             const moduleWI = await import('/scripts/world-info.js');
             const worldInfo = await moduleWI.loadWorldInfo(fileId);
             const entries = worldInfo.entries || {};
             
             let targetUID = null;
+            let targetContent = '';
             for (const id in entries) {
                 const entry = entries[id];
                 const comment = entry.comment || '';
-                if (!entry.disable && (comment.includes('思维链') || entry.title === '思维链')) {
+                if (!entry.disable && (comment.includes(keyword) || entry.title === keyword)) {
                     targetUID = entry.uid;
+                    targetContent = entry.content || '';
                     break;
                 }
             }
             
-            if (!targetUID) return;
+            if (!targetUID) return false;
             
-            const recLine = `${new Date().toLocaleString()}：${thoughtText}`;
-            const existing = entries[targetUID].content || '';
-            const newContent = existing + (existing ? '\n' : '') + recLine;
+            const lines = targetContent.split('\n');
+            const newLines = lines.filter(line => line !== lineText);
+            const newContent = newLines.join('\n');
             
             await globalThis.SillyTavern.getContext()
                 .SlashCommandParser.commands['setentryfield']
                 .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
             
-            debugLog('思维链记录写入成功:', recLine);
+            return true;
         } catch (e) {
-            debugLog('思维链写入失败:', e.message || e);
+            toastr.error(`从世界书删除失败: ${e.message}`);
+            return false;
         }
     }
-    // === 新增：写入注意力转移条目（先清空） ===
-    async function setWorldInfoAttentionShift(selectedOption) {
+    
+    // === 读取世界书忏悔内容(用于聆听忏悔) ===
+    async function getWorldInfoConfession() {
         try {
             const fileId = await findHealthWorldFile();
-            if (!fileId) return;
+            if (!fileId) return '';
             
             const moduleWI = await import('/scripts/world-info.js');
             const worldInfo = await moduleWI.loadWorldInfo(fileId);
             const entries = worldInfo.entries || {};
             
-            let targetUID = null;
             for (const id in entries) {
                 const entry = entries[id];
                 const comment = entry.comment || '';
-                if (!entry.disable && (comment.includes('注意力转移') || entry.title === '注意力转移')) {
-                    targetUID = entry.uid;
-                    break;
+                if (!entry.disable && (comment.includes('忏悔') || entry.title === '忏悔')) {
+                    return entry.content || '';
                 }
             }
-            
-            if (!targetUID) return;
-            
-            const newContent = `${new Date().toLocaleString()}：${selectedOption}`;
-            
-            await globalThis.SillyTavern.getContext()
-                .SlashCommandParser.commands['setentryfield']
-                .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
-            
-            debugLog('注意力转移记录写入成功:', newContent);
+            return '';
         } catch (e) {
-            debugLog('注意力转移写入失败:', e.message || e);
+            toastr.error('读取忏悔记录失败: ' + e.message);
+            return '';
         }
     }
+    
+    // === 情绪记录 ===
     document.getElementById('ha-emotion').addEventListener('click', () => {
-        const txt = prompt('记录当前情绪（例如：轻松 / 焦虑 / 愉快）：','');
+        const txt = prompt('记录当前情绪(例如:轻松 / 焦虑 / 愉快):', '');
         if (!txt) return;
-        const now = new Date();
+        
+        if (!ctx.extensionSettings[MODULE_NAME].mental) {
+            ctx.extensionSettings[MODULE_NAME].mental = [];
+        }
+        
         ctx.extensionSettings[MODULE_NAME].mental.push({
             text: txt,
-            ts: now.toISOString()
+            ts: new Date().toISOString(),
+            enabled: true
         });
         saveSettings();
-        alert('情绪已记录');
+        toastr.success('情绪已记录');
         renderLog();
-        appendToWorldInfoMentalLog(txt);
+        appendToWorldInfoEntry('心理', txt);
     });
-    // === 新增：思维链识别按钮 ===
+    
+    // === 思维链识别 ===
     document.getElementById('ha-thought-chain').addEventListener('click', () => {
-        const txt = prompt('请输入当前的思维链：', '');
+        const txt = prompt('请输入当前的思维链:', '');
         if (!txt) return;
-        appendToWorldInfoThoughtChain(txt);
-        alert('思维链已记录');
-    });
-  // === 新增：转移注意力按钮 ===
-document.getElementById('ha-attention-shift').addEventListener('click', async () => {
-    try {
-        const api = ctx.extensionSettings[MODULE_NAME].apiConfig || {};
-        if (!api.url) {
-            toastr.warning('未配置独立 API');
-            debugLog('注意力转移: 未配置 API');
-            return;
+        
+        if (!ctx.extensionSettings[MODULE_NAME].thoughtChains) {
+            ctx.extensionSettings[MODULE_NAME].thoughtChains = [];
         }
-
-        // === 创建弹窗 ===
-        const modal = document.createElement('div');
-        modal.style.cssText = `
+        
+        ctx.extensionSettings[MODULE_NAME].thoughtChains.push({
+            text: txt,
+            ts: new Date().toISOString(),
+            enabled: true
+        });
+        saveSettings();
+        toastr.success('思维链已记录');
+        appendToWorldInfoEntry('思维链', txt);
+    });
+    
+    // === 忏悔室 ===
+    document.getElementById('ha-confession').addEventListener('click', () => {
+        const txt = prompt('请书写最近犯的错:', '');
+        if (!txt) return;
+        
+        if (!ctx.extensionSettings[MODULE_NAME].confessions) {
+            ctx.extensionSettings[MODULE_NAME].confessions = [];
+        }
+        
+        ctx.extensionSettings[MODULE_NAME].confessions.push({
+            text: txt,
+            ts: new Date().toISOString(),
+            enabled: true
+        });
+        saveSettings();
+        toastr.success('忏悔已记录');
+        appendToWorldInfoEntry('忏悔', txt);
+    });
+    
+    // === 聆听忏悔 ===
+    document.getElementById('ha-listen-confession').addEventListener('click', async () => {
+        try {
+            const api = ctx.extensionSettings[MODULE_NAME].apiConfig || {};
+            if (!api.url) {
+                toastr.warning('未配置独立 API');
+                return;
+            }
+            
+            subPanel.innerText = '正在聆听忏悔...';
+            
+            const confessionContent = await getWorldInfoConfession();
+            if (!confessionContent) {
+                subPanel.innerText = '暂无忏悔记录';
+                return;
+            }
+            
+            const endpoint = api.url.replace(/\/$/, '') + '/v1/chat/completions';
+            
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(api.key ? { 'Authorization': `Bearer ${api.key}` } : {})
+                },
+                body: JSON.stringify({
+                    model: api.model,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: '你是一位富有同理心的心理辅导者,请对用户的忏悔内容给予温和、理解和建设性的回应。'
+                        },
+                        {
+                            role: 'user',
+                            content: `以下是用户的忏悔记录:\n${confessionContent}\n\n请给予理解和建议。`
+                        }
+                    ],
+                    max_tokens: 5000
+                })
+            });
+            
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            
+            const data = await res.json();
+            const text = data.choices?.[0]?.message?.content || JSON.stringify(data);
+            subPanel.innerText = text;
+            subPanel.scrollTop = subPanel.scrollHeight;
+            
+        } catch (e) {
+            subPanel.innerText = 'API 请求失败:' + (e.message || e);
+            toastr.error('聆听忏悔失败: ' + e.message);
+        }
+    });
+    
+    // === 转移注意力 ===
+    document.getElementById('ha-attention-shift').addEventListener('click', async () => {
+        try {
+            const api = ctx.extensionSettings[MODULE_NAME].apiConfig || {};
+            if (!api.url) {
+                toastr.warning('未配置独立 API');
+                return;
+            }
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 320px;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+                z-index: 200000;
+                padding: 20px;
+                text-align: center;
+            `;
+            modal.innerHTML = `
+                <div style="font-size:16px;margin-bottom:10px;">正在生成注意力转移选项...</div>
+                <div class="loading-dots" style="font-size:24px;letter-spacing:3px;">⏳</div>
+                <button id="modal-loading-close" class="ha-btn" style="margin-top:15px;">关闭</button>
+            `;
+            document.body.appendChild(modal);
+            
+            modal.querySelector('#modal-loading-close').addEventListener('click', () => {
+                document.body.removeChild(modal);
+            });
+            const endpoint = api.url.replace(/\/$/, '') + '/v1/chat/completions';
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(api.key ? { 'Authorization': `Bearer ${api.key}` } : {})
+                },
+                body: JSON.stringify({
+                    model: api.model,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: '生成5个转移注意力的活动建议,每个建议包含活动名称、简短描述和英文图片提示词。\n转移注意力的活动不要太老套,要尽量有趣新颖具体,避免像传统心理咨询那样软绵绵小心翼翼给一些宽泛没什么错却也没什么用的建议。\n英文提示词务必使用以下方式生成:生成符合描述的若干单词短语,将其用%拼接。例如:描述是蓝天下一个女人在街上散步,对应的英文提示词就是a%woman%walking%street%blue%sky,提示词不可出现空格与其他标点符号,必须用%连接,提示词不要太长,选取最符合描述的其中一个画面即可,不要出现数字,使用。\n请严格返回 JSON 数组格式,如:[{"title":"活动","description":"说明","imagePrompt":"英文提示词"}]'
+                        },
+                        {
+                            role: 'user',
+                            content: '务必仅返回 JSON,无任何多余文本或注释。'
+                        }
+                    ],
+                    max_tokens: 5000
+                })
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            let responseText = data.choices?.[0]?.message?.content || '';
+            responseText = responseText
+                .replace(/^```(?:json)?/i, '')
+                .replace(/```$/, '')
+                .trim();
+            let options;
+            try {
+                options = JSON.parse(responseText);
+                if (typeof options === 'string') {
+                    options = JSON.parse(options);
+                }
+                if (!Array.isArray(options)) throw new Error('不是数组格式');
+            } catch (e) {
+                toastr.warning('API 返回格式异常,使用默认选项');
+                options = [
+                    { title: "散步", description: "到户外散步15分钟,呼吸新鲜空气", imagePrompt: "peaceful%walking%nature" },
+                    { title: "听音乐", description: "听一些舒缓的音乐放松心情", imagePrompt: "relaxing%headphones%music" },
+                    { title: "绘画", description: "随意画画,表达内心感受", imagePrompt: "person%painting%artwork" },
+                    { title: "深呼吸", description: "做5分钟深呼吸练习", imagePrompt: "meditation%deep%breathing" },
+                    { title: "整理房间", description: "整理一小块区域,获得成就感", imagePrompt: "organizing%clean%room" }
+                ];
+            }
+            options = options.map(opt => ({
+                ...opt,
+                imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(opt.imagePrompt)}`
+            }));
+            let currentIndex = 0;
+            function updateModal() {
+                const current = options[currentIndex];
+                modal.innerHTML = `
+                    <div>
+                        <img src="${current.imageUrl}" style="width:100%;height:200px;object-fit:cover;border-radius:8px;margin-bottom:15px;">
+                        <h3 style="margin:10px 0">${current.title}</h3>
+                        <p style="margin:10px 0;color:#666">${current.description}</p>
+                        <div style="margin-top:20px">
+                            <button id="modal-prev" class="ha-btn" style="margin-right:10px">←</button>
+                            <button id="modal-adopt" class="ha-btn" style="margin-right:10px">采纳</button>
+                            <button id="modal-next" class="ha-btn" style="margin-right:10px">→</button>
+                            <button id="modal-close" class="ha-btn">关闭</button>
+                        </div>
+                    </div>
+                `;
+                modal.querySelector('#modal-prev').addEventListener('click', () => {
+                    currentIndex = (currentIndex - 1 + options.length) % options.length;
+                    updateModal();
+                });
+                modal.querySelector('#modal-next').addEventListener('click', () => {
+                    currentIndex = (currentIndex + 1) % options.length;
+                    updateModal();
+                });
+                modal.querySelector('#modal-adopt').addEventListener('click', async () => {
+                    const selected = options[currentIndex];
+                    await appendToWorldInfoEntry('注意力转移', `${selected.title}:${selected.description}`);
+                    toastr.success('已采纳注意力转移方案');
+                    document.body.removeChild(modal);
+                });
+                modal.querySelector('#modal-close').addEventListener('click', () => {
+                    document.body.removeChild(modal);
+                });
+            }
+            updateModal();
+        } catch (e) {
+            toastr.error('生成失败:' + (e.message || e));
+        }
+    });
+    
+    // === 心理统计 ===
+    document.getElementById('ha-mental-stats').addEventListener('click', () => {
+        const statsModal = document.createElement('div');
+        statsModal.style.cssText = `
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 320px;
+            width: 300px;
+            max-height: 80vh;
             background: white;
             border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
             z-index: 200000;
             padding: 20px;
-            text-align: center;
+            overflow-y: auto;
         `;
-        modal.innerHTML = `
-            <div style="font-size:16px;margin-bottom:10px;">正在生成注意力转移选项...</div>
-            <div class="loading-dots" style="font-size:24px;letter-spacing:3px;">⏳</div>
-        `;
-        document.body.appendChild(modal);
-
-        // === API 调用 ===
-        const endpoint = api.url.replace(/\/$/, '') + '/v1/chat/completions';
-        debugLog('注意力转移: 调用接口', endpoint, 'model:', api.model);
-
-        const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(api.key ? { 'Authorization': `Bearer ${api.key}` } : {})
-            },
-            body: JSON.stringify({
-                model: api.model,
-                messages: [
-                    {
-                        role: 'system',
-                        content: '生成5个转移注意力的活动建议，每个建议包含活动名称、简短描述和英文图片提示词。\n转移注意力的活动不要太老套，要尽量有趣新颖具体，避免像传统心理咨询那样软绵绵小心翼翼给一些宽泛没什么错却也没什么用的建议。\n英文提示词务必使用以下方式生成:生成符合描述的若干单词短语，将其用%拼接。例如:描述是蓝天下一个女人在街上散步，对应的英文提示词就是a%woman%walking%street%blue%sky,提示词不可出现空格与其他标点符号，必须用%连接，提示词不要太长，选取最符合描述的其中一个画面即可，不要出现数字，使用。\n请严格返回 JSON 数组格式，如：[{"title":"活动","description":"说明","imagePrompt":"英文提示词"}]'
-                    },
-                    {
-                        role: 'user',
-                        content: '务必仅返回 JSON，无任何多余文本或注释。'
-                    }
-                ],
-                max_tokens: 5000
-            })
+        statsModal.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+        <h3 style="margin:0;">心理统计</h3>
+        <button id="stats-close" class="ha-btn">关闭</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <button id="stats-emotion" class="ha-btn">情绪统计</button>
+        <button id="stats-meditation" class="ha-btn">正念统计</button>
+        <button id="stats-thought" class="ha-btn">思维链统计</button>
+        <button id="stats-confession" class="ha-btn">忏悔统计</button>
+    </div>
+    <div id="stats-content" style="margin-top:15px;"></div>
+`;
+        document.body.appendChild(statsModal);
+        
+        statsModal.querySelector('#stats-close').addEventListener('click', () => {
+            document.body.removeChild(statsModal);
         });
-
-        debugLog('注意力转移: HTTP 状态', res.status);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-
-        const data = await res.json();
-        let responseText = data.choices?.[0]?.message?.content || '';
-        debugLog(`注意力转移: 返回完整内容 (${responseText.length} 字符)`, responseText);
-
-        // === 🧹 清理 Markdown 包裹的 JSON ===
-        responseText = responseText
-            .replace(/^```(?:json)?/i, '')  // 移除开头的 ``` 或 ```json
-            .replace(/```$/, '')            // 移除结尾的 ```
-            .trim();
-
-        // === 解析 JSON，带多层容错 ===
-        let options;
-        try {
-            options = JSON.parse(responseText);
-            if (typeof options === 'string') {
-                options = JSON.parse(options); // 若模型返回二次嵌套字符串
+        
+        async function showStatsList(storageKey, keyword) {
+            const contentDiv = statsModal.querySelector('#stats-content');
+            contentDiv.innerHTML = '<div>加载中...</div>';
+            
+            const entries = getLocalStorageEntries(storageKey);
+            
+            if (entries.length === 0) {
+                contentDiv.innerHTML = '<div>暂无记录</div>';
+                return;
             }
-            if (!Array.isArray(options)) throw new Error('不是数组格式');
-        } catch (e) {
-            debugLog('注意力转移: JSON 解析失败，使用默认值', e.message);
-            toastr.warning('API 返回格式异常，使用默认选项');
-            options = [
-                { title: "散步", description: "到户外散步15分钟，呼吸新鲜空气", imagePrompt: "peaceful walking in nature" },
-                { title: "听音乐", description: "听一些舒缓的音乐放松心情", imagePrompt: "relaxing with headphones music" },
-                { title: "绘画", description: "随意画画，表达内心感受", imagePrompt: "person painting artwork" },
-                { title: "深呼吸", description: "做5分钟深呼吸练习", imagePrompt: "meditation deep breathing" },
-                { title: "整理房间", description: "整理一小块区域，获得成就感", imagePrompt: "organizing clean room" }
-            ];
-        }
-
-        // === 为每个选项生成图片 URL ===
-        options = options.map(opt => ({
-            ...opt,
-            imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(opt.imagePrompt)}`
-        }));
-
-        // === UI更新函数 ===
-        let currentIndex = 0;
-        function updateModal() {
-            const current = options[currentIndex];
-            modal.innerHTML = `
-                <div>
-                    <img src="${current.imageUrl}" style="width:100%;height:200px;object-fit:cover;border-radius:8px;margin-bottom:15px;">
-                    <h3 style="margin:10px 0">${current.title}</h3>
-                    <p style="margin:10px 0;color:#666">${current.description}</p>
-                    <div style="margin-top:20px">
-                        <button id="modal-prev" class="ha-btn" style="margin-right:10px">←</button>
-                        <button id="modal-adopt" class="ha-btn" style="margin-right:10px">采纳</button>
-                        <button id="modal-next" class="ha-btn" style="margin-right:10px">→</button>
-                        <button id="modal-close" class="ha-btn">关闭</button>
+            
+            let html = '<div style="max-height:400px;overflow-y:auto;">';
+            entries.forEach((entry) => {
+                const displayText = entry.text.length > 50 ? entry.text.substring(0, 50) + '...' : entry.text;
+                const statusColor = entry.enabled ? '#28a745' : '#6c757d';
+                html += `
+                    <div style="border:1px solid #ddd;padding:8px;margin:5px 0;border-radius:4px;">
+                        <div style="margin-bottom:6px;font-size:13px;color:${statusColor};">
+                            ${entry.enabled ? '✓' : '✗'} ${displayText}
+                        </div>
+                        <div style="display:flex;gap:3px;flex-wrap:wrap;">
+                            <button class="ha-btn edit-entry" data-index="${entry.index}" style="font-size:11px;padding:2px 6px;">编辑</button>
+                            <button class="ha-btn delete-entry" data-index="${entry.index}" style="font-size:11px;padding:2px 6px;">删除</button>
+                            ${entry.enabled 
+                                ? `<button class="ha-btn disable-entry" data-index="${entry.index}" style="font-size:11px;padding:2px 6px;">取消启用</button>`
+                                : `<button class="ha-btn enable-entry" data-index="${entry.index}" style="font-size:11px;padding:2px 6px;">启用</button>`
+                            }
+                        </div>
                     </div>
-                </div>
-            `;
-
-            modal.querySelector('#modal-prev').addEventListener('click', () => {
-                currentIndex = (currentIndex - 1 + options.length) % options.length;
-                updateModal();
+                `;
             });
-            modal.querySelector('#modal-next').addEventListener('click', () => {
-                currentIndex = (currentIndex + 1) % options.length;
-                updateModal();
+            html += '</div>';
+            contentDiv.innerHTML = html;
+            
+            // 编辑按钮
+            contentDiv.querySelectorAll('.edit-entry').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const index = parseInt(btn.dataset.index);
+                    const entry = entries.find(e => e.index === index);
+                    const newText = prompt('编辑内容:', entry.text);
+                    if (!newText || newText === entry.text) return;
+                    
+                    editLocalStorageEntry(storageKey, index, newText);
+                    
+                    // 如果启用状态,更新世界书
+                    if (entry.enabled) {
+                        const fullOldLine = `${new Date(entry.ts).toLocaleString()}:${entry.text}`;
+                        await deleteLineFromWorldInfo(keyword, fullOldLine);
+                        await appendToWorldInfoEntry(keyword, newText);
+                    }
+                    
+                    toastr.success('编辑成功');
+                    showStatsList(storageKey, keyword);
+                });
             });
-            modal.querySelector('#modal-adopt').addEventListener('click', () => {
-                const selected = options[currentIndex];
-                setWorldInfoAttentionShift(`${selected.title}：${selected.description}`);
-                toastr.success('已采纳注意力转移方案');
-                document.body.removeChild(modal);
+            
+            // 删除按钮
+            contentDiv.querySelectorAll('.delete-entry').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    if (!confirm('确定要删除此条记录吗?')) return;
+                    
+                    const index = parseInt(btn.dataset.index);
+                    const entry = entries.find(e => e.index === index);
+                    
+                    // 如果启用状态,从世界书删除
+                    if (entry.enabled) {
+                        const fullLine = `${new Date(entry.ts).toLocaleString()}:${entry.text}`;
+                        await deleteLineFromWorldInfo(keyword, fullLine);
+                    }
+                    
+                    // 从localStorage删除
+                    deleteLocalStorageEntry(storageKey, index);
+                    
+                    toastr.success('删除成功');
+                    showStatsList(storageKey, keyword);
+                });
             });
-            modal.querySelector('#modal-close').addEventListener('click', () => {
-                document.body.removeChild(modal);
+            
+            // 取消启用按钮
+            contentDiv.querySelectorAll('.disable-entry').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const index = parseInt(btn.dataset.index);
+                    const entry = entries.find(e => e.index === index);
+                    
+                    // 只从世界书删除
+                    const fullLine = `${new Date(entry.ts).toLocaleString()}:${entry.text}`;
+                    await deleteLineFromWorldInfo(keyword, fullLine);
+                    
+                    // 更新localStorage的启用状态
+                    updateLocalStorageEntryEnabled(storageKey, index, false);
+                    
+                    toastr.success('已取消启用');
+                    showStatsList(storageKey, keyword);
+                });
+            });
+            
+            // 启用按钮
+            contentDiv.querySelectorAll('.enable-entry').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const index = parseInt(btn.dataset.index);
+                    const entry = entries.find(e => e.index === index);
+                    
+                    // 同步到世界书
+                    await appendToWorldInfoEntry(keyword, entry.text);
+                    
+                    // 更新localStorage的启用状态
+                    updateLocalStorageEntryEnabled(storageKey, index, true);
+                    
+                    toastr.success('已启用并同步到世界书');
+                    showStatsList(storageKey, keyword);
+                });
             });
         }
-
-        updateModal();
-
-    } catch (e) {
-        debugLog('注意力转移生成失败:', e.message || e);
-        toastr.error('生成失败：' + (e.message || e));
-    }
-});
+        
+        statsModal.querySelector('#stats-emotion').addEventListener('click', () => {
+            showStatsList('mental', '心理');
+        });
+        
+        statsModal.querySelector('#stats-meditation').addEventListener('click', () => {
+            showStatsList('meditation', '冥想');
+        });
+        
+        statsModal.querySelector('#stats-thought').addEventListener('click', () => {
+            showStatsList('thoughtChains', '思维链');
+        });
+        
+        statsModal.querySelector('#stats-confession').addEventListener('click', () => {
+            showStatsList('confessions', '忏悔');
+        });
+    });
+    
     // === 冥想开始 ===
     btnStart.addEventListener('click', async () => {
         const mins = Number(slider.value);
         targetDuration = mins;
         startTime = new Date();
-        timerEl.innerText = ''; // 清空计时显示
+        timerEl.innerText = '';
         btnStart.style.display = 'none';
         btnStop.style.display = 'inline-block';
-        // 启动计时器
+        
         if (timerId) clearInterval(timerId);
         timerId = setInterval(() => {
             const elapsedSec = Math.floor((Date.now() - startTime.getTime()) / 1000);
@@ -2826,25 +3193,24 @@ document.getElementById('ha-attention-shift').addEventListener('click', async ()
                 }
             }
         }, 1000);
-        // 保持原有 API 调用逻辑
+        
         try {
             const api = ctx.extensionSettings[MODULE_NAME].apiConfig || {};
             if (!api.url) {
-                subPanel.innerText = '未配置独立 API，示例提示：深呼吸、放松身体、正念冥想。';
-                debugLog('正念指导: 未配置 API');
+                subPanel.innerText = '未配置独立 API,示例提示:深呼吸、放松身体、正念冥想。';
+                toastr.warning('未配置独立 API');
                 return;
             }
             
             const endpoint = api.url.replace(/\/$/, '') + '/v1/chat/completions';
-            debugLog('正念指导调用: 请求将发送到', endpoint, 'model:', api.model);
             
-            const history = ctx.extensionSettings[MODULE_NAME].mental.map(m => 
-                `${m.ts}：${m.text}`
+            const history = getLocalStorageEntries('mental').map(m => 
+                `${m.ts}:${m.text}`
             ).join('\n');
             
             const promptText = mins === 0 
-                ? `请根据以下用户情绪记录，立即给出一段简短正念指导和放松提示：\n${history || '无记录'}`
-                : `请提供一段正念冥想指导，时长约 ${mins} 分钟，根据用户历史情绪记录：\n${history || '无记录'}`;
+                ? `请根据以下用户情绪记录,立即给出一段简短正念指导和放松提示:\n${history || '无记录'}`
+                : `请提供一段正念冥想指导,时长约 ${mins} 分钟,根据用户历史情绪记录:\n${history || '无记录'}`;
             
             const res = await fetch(endpoint, {
                 method: 'POST',
@@ -2855,14 +3221,13 @@ document.getElementById('ha-attention-shift').addEventListener('click', async ()
                 body: JSON.stringify({
                     model: api.model,
                     messages: [
-                        { role: 'system', content: '你是心理健康指导专家，为用户提供正念冥想与情绪缓解建议。' },
+                        { role: 'system', content: '你是心理健康指导专家,为用户提供正念冥想与情绪缓解建议。' },
                         { role: 'user', content: promptText }
                     ],
                     max_tokens: 5000
                 })
             });
             
-            debugLog('正念指导调用: HTTP 状态', res.status);
             if (!res.ok) throw new Error('HTTP ' + res.status);
             
             const data = await res.json();
@@ -2870,29 +3235,45 @@ document.getElementById('ha-attention-shift').addEventListener('click', async ()
             subPanel.innerText = text;
             subPanel.scrollTop = subPanel.scrollHeight;
             
-            debugLog('正念指导调用: 返回摘录', text.slice(0, 200));
         } catch (e) {
-            subPanel.innerText = 'API 请求失败：' + (e.message || e);
-            subPanel.scrollTop = subPanel.scrollHeight;
-            debugLog('正念指导调用失败:', e.message || e);
+            subPanel.innerText = 'API 请求失败:' + (e.message || e);
+            toastr.error('正念指导调用失败: ' + e.message);
         }
     });
+    
     // === 冥想结束 ===
     function stopMeditation() {
         if (!startTime) return;
-        const duration = Math.floor((Date.now() - startTime.getTime()) / 60000); // 实际分钟数
+        const duration = Math.floor((Date.now() - startTime.getTime()) / 60000);
         clearInterval(timerId);
         timerId = null;
         btnStart.style.display = 'inline-block';
         btnStop.style.display = 'none';
-        timerEl.innerText = `本次冥想结束，共进行 ${duration} 分钟`;
-        appendToWorldInfoMeditationLog(duration);
+        timerEl.innerText = `本次冥想结束,共进行 ${duration} 分钟`;
+        
+        // 保存到localStorage
+        if (!ctx.extensionSettings[MODULE_NAME].meditation) {
+            ctx.extensionSettings[MODULE_NAME].meditation = [];
+        }
+        
+        const record = {
+            text: `本次冥想 ${duration} 分钟`,
+            ts: new Date().toISOString(),
+            enabled: true
+        };
+        ctx.extensionSettings[MODULE_NAME].meditation.push(record);
+        saveSettings();
+        
+        // 同步到世界书
+        appendToWorldInfoEntry('冥想', record.text);
+        
         startTime = null;
     }
     btnStop.addEventListener('click', stopMeditation);
+    
     function renderLog() {
         const arr = ctx.extensionSettings[MODULE_NAME].mental || [];
-        logEl.innerText = `已记录 ${arr.length} 条情绪记录（存储在扩展设置与世界书中）`;
+        logEl.innerText = `已记录 ${arr.length} 条情绪记录(存储在扩展设置与世界书中)`;
     }
     renderLog();
 }
@@ -3741,40 +4122,48 @@ async function showTodo() {
     if (!t.id) t.id = 'todo_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   });
   
-  async function scheduleNotification(todo) {
-    if (!backendReady) {
-      if (typeof toastr !== 'undefined') toastr.error('后端未连接');
-      return false;
-    }
-    if (!todo.due) {
-      if (typeof toastr !== 'undefined') toastr.info('该待办无截止时间');
-      return false;
-    }
-    let dueDateTime;
-    if (todo.due.includes('T')) {
-      dueDateTime = new Date(todo.due);
-    } else {
-      dueDateTime = new Date(todo.due + 'T08:00:00');
-    }
-    const now = new Date();
-    const delay = dueDateTime.getTime() - now.getTime();
-    if (delay <= 0) {
-      if (typeof toastr !== 'undefined') toastr.warning('截止时间已过');
-      return false;
-    }
-    const success = await backendClient.syncTodos(todos);
-    if (success) {
-      const dateStr = dueDateTime.toLocaleString('zh-CN');
-      if (typeof toastr !== 'undefined') {
-        toastr.success(`已预约通知: ${dateStr}`, '🎯 通知已设置');
-      }
-      debugLog('通知已调度:', todo.name, dateStr);
-      return true;
-    } else {
-      if (typeof toastr !== 'undefined') toastr.error('通知预约失败');
-      return false;
-    }
+async function scheduleNotification(todo) {
+  if (!backendReady) {
+    if (typeof toastr !== 'undefined') toastr.error('后端未连接');
+    return false;
   }
+  if (!todo.due) {
+    if (typeof toastr !== 'undefined') toastr.info('该待办无截止时间');
+    return false;
+  }
+  
+  // 🔥 关键：先设置 notifyScheduled = true
+  todo.notifyScheduled = true;
+  
+  let dueDateTime;
+  if (todo.due.includes('T')) {
+    dueDateTime = new Date(todo.due);
+  } else {
+    dueDateTime = new Date(todo.due + 'T08:00:00');
+  }
+  const now = new Date();
+  const delay = dueDateTime.getTime() - now.getTime();
+  if (delay <= 0) {
+    if (typeof toastr !== 'undefined') toastr.warning('截止时间已过');
+    todo.notifyScheduled = false;
+    return false;
+  }
+  
+  // 🔥 同步到后端
+  const success = await backendClient.syncTodos(todos);
+  if (success) {
+    const dateStr = dueDateTime.toLocaleString('zh-CN');
+    if (typeof toastr !== 'undefined') {
+      toastr.success(`已预约通知: ${dateStr}`, '🎯 通知已设置');
+    }
+    debugLog('通知已调度:', todo.name, dateStr);
+    return true;
+  } else {
+    todo.notifyScheduled = false;
+    if (typeof toastr !== 'undefined') toastr.error('通知预约失败');
+    return false;
+  }
+}
   
   async function cancelNotification(todo) {
     if (!backendReady) return;
@@ -4267,6 +4656,73 @@ async function showMemo() {
 
   render();
 }
+
+
+
+
+// 🎵 最终完整解决方案 - 可直接替换使用
+
+
+
+
+
+
+
+
+
+
+
+
+// ==================== 使用说明 ====================
+
+/**
+ * 使用方法:
+ * 
+ * 1. 完整替换你的 playSong() 函数
+ * 2. 确保 getMusicUrl() 函数已经是改进版(双平台支持)
+ * 3. 确保页面有 id="ha-music-lyrics" 的歌词容器
+ * 4. 确保 toaster() 函数可用
+ * 
+ * 核心改进:
+ * ✅ 歌词先加载并立即显示
+ * ✅ "正在搜索音源"提示追加在底部(不覆盖歌词)
+ * ✅ 音源加载完成后自动移除提示
+ * ✅ 错误信息也追加在底部
+ * ✅ 所有状态提示都使用 appendChild,不用 textContent
+ * 
+ * 测试建议:
+ * 1. 测试有歌词的歌曲
+ * 2. 测试无歌词的歌曲
+ * 3. 测试找不到音源的情况
+ * 4. 测试网络异常情况
+ */
+
+
+// 🎵 修复点击冲突的版本
+
+// 问题分析：
+// 1. 播放器的外层 popup 有全屏半透明背景 (width: 100%, height: 100%)
+// 2. 这个背景层的 z-index: 99998
+// 3. 悬浮栏的 z-index: 99999
+// 4. 当播放器隐藏时(display: none)，背景层也隐藏了
+// 5. 但点击悬浮栏时，会先显示播放器(包括背景层)
+// 6. 背景层立即覆盖了悬浮栏，导致无法继续交互
+
+
+
+
+
+
+// 🎵 重构版 showBgm - 使用全局单例模式管理播放器和悬浮栏
+
+// 🎵 完整的 showBgm 函数 - 包含悬浮栏功能
+
+// 🎵 修复后的完整 showBgm 函数
+// 修复内容:
+// 1. 播放器位置改为 left:10px; top:50px;
+// 2. 悬浮栏宽度280px + 位置记忆
+// 3. 点击🎵返回播放器不会重新播放(保持播放状态)
+
 async function showBgm() {
   const container = content;
   container.style.display = 'block';
@@ -4303,16 +4759,15 @@ async function showBgm() {
   const debug = (...args) => console.log('[BGM]', ...args);
   const state = { deleteMode: false };
   const tags = ctx.extensionSettings[MODULE_NAME].bgmTags || [];
-  // 初始化 limitInput 值
-const savedLimit = ctx.extensionSettings[MODULE_NAME].bgmLimit || 10;
-limitInput.value = savedLimit;
+  
+  const savedLimit = ctx.extensionSettings[MODULE_NAME].bgmLimit || 10;
+  limitInput.value = savedLimit;
 
-// 监听用户修改 limitInput
-limitInput.onchange = () => {
-  const val = parseInt(limitInput.value) || 10;
-  ctx.extensionSettings[MODULE_NAME].bgmLimit = val;
-  saveSettings();
-};
+  limitInput.onchange = () => {
+    const val = parseInt(limitInput.value) || 10;
+    ctx.extensionSettings[MODULE_NAME].bgmLimit = val;
+    saveSettings();
+  };
 
   function toaster(msg, type = 'info') {
     window.toastr?.[type] ? toastr[type](msg) : alert(msg);
@@ -4364,7 +4819,6 @@ limitInput.onchange = () => {
     delBtn.style.background = state.deleteMode ? '#f88' : '';
   };
 
-  // ⭐ 读取 ❤️音乐 条目
   starBtn.onclick = async () => {
     listArea.innerText = '正在读取 ❤️音乐 条目...';
     const songs = await readWorldMusicEntry('❤️音乐');
@@ -4375,7 +4829,6 @@ limitInput.onchange = () => {
     renderList(songs);
   };
 
-  // 🔎 搜索按钮
   searchBtn.onclick = async () => {
     const kw = searchInput.value.trim();
     const limit = parseInt(limitInput.value) || 10;
@@ -4394,9 +4847,9 @@ limitInput.onchange = () => {
       const skipList = await readWorldMusicEntry('🖤音乐') || [];
       let prompt;
       if (!kw) {
-        prompt = `请推荐${limit}首符合这些标签的歌曲（格式“歌名 - 歌手”）,每行一条，不要输出歌手和歌名以外的内容。排除以下音乐。\n标签：${enabledTags.join('、')}\n排除：${skipList.join('、')}`;
+        prompt = `请推荐${limit}首符合这些标签的歌曲（格式"歌名 - 歌手"）,每行一条，不要输出歌手和歌名以外的内容。排除以下音乐。\n标签：${enabledTags.join('、')}\n排除：${skipList.join('、')}`;
       } else {
-        prompt = `请推荐${limit}首与“${kw}”相关的歌曲，格式为“歌名 - 歌手”。不要输出歌手和歌名以外的内容例如推荐语。`;
+        prompt = `请推荐${limit}首与"${kw}"相关的歌曲，格式为"歌名 - 歌手"。不要输出歌手和歌名以外的内容例如推荐语。`;
       }
 
       const res = await fetch(endpoint, {
@@ -4437,43 +4890,236 @@ limitInput.onchange = () => {
   let Music_Audio = new Audio();
   let Music_List = [];
   let Music_Index = 0;
-  let Music_Mode = 'sequence'; // sequence | random | single
-  let Lyric_Timer = null;
-  // 全局变量添加
-let Lyrics_Data = []; // 存储解析后的歌词数据 [{time: seconds, text: "歌词"}]
-let Current_Lyric_Index = -1; // 当前高亮的歌词索引
-// 解析 LRC 格式歌词
-function parseLRC(lrcText) {
-  if (!lrcText) return [];
+  let Music_Mode = 'sequence';
+  let Lyrics_Data = [];
+  let Current_Lyric_Index = -1;
+  let Float_Bar_Active = false;
   
-  const lines = lrcText.split('\n');
-  const lyrics = [];
-  const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/g;
-  
-  for (const line of lines) {
-    const matches = [...line.matchAll(timeRegex)];
-    if (matches.length === 0) continue;
-    
-    // 提取歌词文本（去掉时间标签）
-    const text = line.replace(timeRegex, '').trim();
-    if (!text) continue;
-    
-    // 一行可能有多个时间标签
-    for (const match of matches) {
-      const minutes = parseInt(match[1]);
-      const seconds = parseInt(match[2]);
-      const milliseconds = parseInt(match[3].padEnd(3, '0'));
-      const time = minutes * 60 + seconds + milliseconds / 1000;
-      
-      lyrics.push({ time, text });
+  // 🔧 新增: 当前播放状态(用于恢复播放器)
+  let Current_Playing_Song = null; // { name, artist }
+  let Is_Currently_Playing = false;
+
+  // ==================== 悬浮栏功能 (改进版) ====================
+
+  // 📍 读取悬浮栏位置
+  function loadFloatBarPosition() {
+    try {
+      const saved = localStorage.getItem('ha-float-bar-position');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      debug('读取悬浮栏位置失败', e);
+    }
+    // 默认位置
+    return { top: '50%', right: '10px', transform: 'translateY(-50%)' };
+  }
+
+  // 💾 保存悬浮栏位置
+  function saveFloatBarPosition(position) {
+    try {
+      localStorage.setItem('ha-float-bar-position', JSON.stringify(position));
+    } catch (e) {
+      debug('保存悬浮栏位置失败', e);
     }
   }
-  
-  // 按时间排序
-  return lyrics.sort((a, b) => a.time - b.time);
-}
 
-  // 渲染歌曲列表
+  function createFloatBar() {
+    if (document.getElementById('ha-float-bar')) return;
+
+    const floatBar = document.createElement('div');
+    floatBar.id = 'ha-float-bar';
+    floatBar.innerHTML = `
+      <div id="ha-float-lyric" style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">等待播放...</div>
+      <button id="ha-float-show" style="background:none;border:none;font-size:18px;cursor:pointer;padding:0 8px;color:#4169E1;">🎵</button>
+    `;
+    
+    floatBar.style.cssText = `
+      position: fixed;
+      background: rgba(248, 248, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(65, 105, 225, 0.3);
+      border-radius: 20px;
+      padding: 8px 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 250px;
+      z-index: 99998;
+      cursor: move;
+      user-select: none;
+      transition: opacity 0.3s ease;
+    `;
+
+    // 📍 恢复上次位置
+    const savedPos = loadFloatBarPosition();
+    if (savedPos.top) floatBar.style.top = savedPos.top;
+    if (savedPos.right) floatBar.style.right = savedPos.right;
+    if (savedPos.left) floatBar.style.left = savedPos.left;
+    if (savedPos.transform) floatBar.style.transform = savedPos.transform;
+
+    // 移动端适配
+    if (window.innerWidth <= 768) {
+      floatBar.style.fontSize = '12px';
+      floatBar.style.padding = '6px 10px';
+    }
+
+    document.body.appendChild(floatBar);
+
+    // 拖动功能
+    let isDragging = false;
+    let startX, startY, initialX, initialY;
+
+    floatBar.addEventListener('mousedown', startDrag);
+    floatBar.addEventListener('touchstart', startDrag);
+
+    function startDrag(e) {
+      if (e.target.id === 'ha-float-show') return;
+
+      isDragging = true;
+      const touch = e.touches ? e.touches[0] : e;
+      startX = touch.clientX;
+      startY = touch.clientY;
+      
+      const rect = floatBar.getBoundingClientRect();
+      initialX = rect.left;
+      initialY = rect.top;
+
+      floatBar.style.transition = 'none';
+      e.preventDefault();
+    }
+
+    function doDrag(e) {
+      if (!isDragging) return;
+
+      const touch = e.touches ? e.touches[0] : e;
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+
+      let newX = initialX + deltaX;
+      let newY = initialY + deltaY;
+
+      const maxX = window.innerWidth - floatBar.offsetWidth - 10;
+      const maxY = window.innerHeight - floatBar.offsetHeight - 10;
+
+      newX = Math.max(10, Math.min(newX, maxX));
+      newY = Math.max(10, Math.min(newY, maxY));
+
+      floatBar.style.left = newX + 'px';
+      floatBar.style.top = newY + 'px';
+      floatBar.style.right = 'auto';
+      floatBar.style.transform = 'none';
+    }
+
+    function stopDrag() {
+      if (!isDragging) return;
+      isDragging = false;
+      floatBar.style.transition = 'opacity 0.3s ease';
+      
+      // 💾 保存当前位置
+      const rect = floatBar.getBoundingClientRect();
+      saveFloatBarPosition({
+        top: rect.top + 'px',
+        left: rect.left + 'px',
+        right: 'auto',
+        transform: 'none'
+      });
+    }
+
+    document.addEventListener('mousemove', doDrag);
+    document.addEventListener('touchmove', doDrag);
+    document.addEventListener('mouseup', stopDrag);
+    document.addEventListener('touchend', stopDrag);
+
+    // 🎵 点击返回播放器 (不重新播放)
+    document.getElementById('ha-float-show').onclick = (e) => {
+      e.stopPropagation();
+      showMusicPlayerWithoutReplay();
+    };
+
+    Float_Bar_Active = true;
+  }
+
+  function updateFloatLyric() {
+    const floatLyric = document.getElementById('ha-float-lyric');
+    if (!floatLyric) return;
+
+    if (Current_Lyric_Index >= 0 && Lyrics_Data[Current_Lyric_Index]) {
+      const text = Lyrics_Data[Current_Lyric_Index].text;
+      floatLyric.textContent = text;
+      
+      if (floatLyric.scrollWidth > floatLyric.clientWidth) {
+        floatLyric.style.animation = 'scroll-lyric 8s linear infinite';
+      } else {
+        floatLyric.style.animation = 'none';
+      }
+    } else {
+      floatLyric.textContent = Music_Audio.paused ? '已暂停' : '播放中...';
+      floatLyric.style.animation = 'none';
+    }
+  }
+
+  function removeFloatBar() {
+    const floatBar = document.getElementById('ha-float-bar');
+    if (floatBar) floatBar.remove();
+    Float_Bar_Active = false;
+  }
+
+  // 🔧 新增: 不重新播放地打开播放器
+  function showMusicPlayerWithoutReplay() {
+    removeFloatBar();
+    
+    if (Current_Playing_Song) {
+      // 重建播放器UI,但不调用playSong
+      openMusicPlayerUI(Current_Playing_Song.name, Current_Playing_Song.artist, true);
+    }
+  }
+
+  // 添加滚动动画样式
+  if (!document.getElementById('ha-float-animations')) {
+    const style = document.createElement('style');
+    style.id = 'ha-float-animations';
+    style.textContent = `
+      @keyframes scroll-lyric {
+        0%, 10% { transform: translateX(0); }
+        90%, 100% { transform: translateX(-50%); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // ==================== 解析 LRC 格式歌词 ====================
+  
+  function parseLRC(lrcText) {
+    if (!lrcText) return [];
+    
+    const lines = lrcText.split('\n');
+    const lyrics = [];
+    const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/g;
+    
+    for (const line of lines) {
+      const matches = [...line.matchAll(timeRegex)];
+      if (matches.length === 0) continue;
+      
+      const text = line.replace(timeRegex, '').trim();
+      if (!text) continue;
+      
+      for (const match of matches) {
+        const minutes = parseInt(match[1]);
+        const seconds = parseInt(match[2]);
+        const milliseconds = parseInt(match[3].padEnd(3, '0'));
+        const time = minutes * 60 + seconds + milliseconds / 1000;
+        
+        lyrics.push({ time, text });
+      }
+    }
+    
+    return lyrics.sort((a, b) => a.time - b.time);
+  }
+
+  // ==================== 渲染歌曲列表 ====================
+  
   async function renderList(songs) {
     listArea.innerHTML = '';
     const likes = await readWorldMusicEntry('❤️音乐') || [];
@@ -4532,73 +5178,128 @@ function parseLRC(lrcText) {
       play.onclick = e => {
         e.stopPropagation();
         Music_Index = i;
-        openMusicPlayer(Music_List[i]);
+        openMusicPlayer(Music_List[i].name, Music_List[i].artist);
       };
     });
   }
 
-  // 播放器 UI + 逻辑
-  async function openMusicPlayer(songObj) {
-    const { name, artist } = songObj;
+  // ==================== 播放器 UI (拆分版本) ====================
+  
+  // 🔧 拆分: 打开播放器并播放歌曲
+  async function openMusicPlayer(name, artist) {
+    await openMusicPlayerUI(name, artist, false);
+  }
+
+  // 🔧 新增: 打开播放器UI (可选是否重新播放)
+  async function openMusicPlayerUI(name, artist, skipPlay = false) {
     let existing = document.getElementById('ha-music-popup');
     if (existing) existing.remove();
 
     const popup = document.createElement('div');
     popup.id = 'ha-music-popup';
     popup.innerHTML = `
-  <div style="
-    background:#F8F8FF;color:#fff;border-radius:12px;
-    width:90%;max-width:420px;max-height:80vh;
-    position:absolute;left:50%;top:50%;
-    transform:translate(-50%,-50%);
-    box-shadow:0 4px 20px rgba(0,0,0,0.4);
-    display:flex;flex-direction:column;
-    overflow:hidden;z-index:99999;">
-    <div style="padding:10px 16px;font-weight:600;color:#778899;display:flex;justify-content:space-between;align-items:center;">
-      <span>🎵 ${name} - ${artist}</span>
-      <button id="ha-music-close" style="background:none;border:none;color:#778899;font-size:18px;">✖</button>
-    </div>
-    <div id="ha-music-lyrics" style="flex:1;padding:10px 14px;font-size:13px;overflow-y:auto;text-align:center;color:#ccc;white-space:pre-wrap;">加载歌词中...</div>
-    
-    <!-- 🎚️ 播放进度条 -->
-    <div style="padding:6px 10px;">
-      <input type="range" id="ha-progress" min="0" max="100" value="0" step="0.1" style="width:100%;">
-    </div>
+      <div style="
+        background:#F8F8FF;color:#fff;border-radius:12px;
+        width:90%;max-width:420px;max-height:80vh;
+        position:fixed;left:10px;top:50px;
+        box-shadow:0 4px 20px rgba(0,0,0,0.4);
+        display:flex;flex-direction:column;
+        overflow:hidden;z-index:99999;">
+        
+        <div style="padding:10px 16px;font-weight:600;color:#778899;display:flex;justify-content:space-between;align-items:center;">
+          <span>🎵 ${name} - ${artist}</span>
+          <div style="display:flex;gap:8px;">
+            <button id="ha-music-float" style="background:none;border:none;color:#778899;font-size:16px;cursor:pointer;" title="悬浮显示">📌</button>
+            <button id="ha-music-close" style="background:none;border:none;color:#778899;font-size:18px;cursor:pointer;">✖</button>
+          </div>
+        </div>
+        
+        <div id="ha-music-lyrics" style="flex:1;padding:10px 14px;font-size:13px;overflow-y:auto;text-align:center;color:#ccc;white-space:pre-wrap;">加载歌词中...</div>
+        
+        <div style="padding:6px 10px;">
+          <input type="range" id="ha-progress" min="0" max="100" value="0" step="0.1" style="width:100%;">
+        </div>
 
-    <div style="padding:8px;border-top:1px solid #444;display:flex;align-items:center;justify-content:center;gap:12px;">
-      <button id="ha-prev" class="ha-btn">⏮️</button>
-      <button id="ha-play" class="ha-btn">▶️</button>
-      <button id="ha-next" class="ha-btn">⏭️</button>
-    </div>
-    <div style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;">
-      <button id="ha-mode" class="ha-btn" style="font-size:13px;">🔁 顺序播放</button>
-      <input type="range" id="ha-volume" min="0" max="1" step="0.01" value="0.7" style="width:120px;">
-    </div>
-  </div>`;
+        <div style="padding:8px;border-top:1px solid #444;display:flex;align-items:center;justify-content:center;gap:12px;">
+          <button id="ha-prev" class="ha-btn">⏮️</button>
+          <button id="ha-play" class="ha-btn">▶️</button>
+          <button id="ha-next" class="ha-btn">⏭️</button>
+        </div>
+        
+        <div style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;">
+          <button id="ha-mode" class="ha-btn" style="font-size:13px;">🔁 顺序播放</button>
+          <input type="range" id="ha-volume" min="0" max="1" step="0.01" value="0.7" style="width:120px;">
+        </div>
+      </div>`;
     document.body.appendChild(popup);
 
-    document.getElementById('ha-music-close').onclick = () => popup.remove();
+    // 关闭按钮
+    document.getElementById('ha-music-close').onclick = () => {
+      popup.remove();
+      removeFloatBar();
+    };
+
+    // 悬浮按钮
+    document.getElementById('ha-music-float').onclick = () => {
+      if (Float_Bar_Active) {
+        removeFloatBar();
+      } else {
+        createFloatBar();
+        popup.remove();
+      }
+    };
+
     document.getElementById('ha-volume').oninput = e => (Music_Audio.volume = e.target.value);
     document.getElementById('ha-play').onclick = togglePlay;
     document.getElementById('ha-prev').onclick = playPrev;
     document.getElementById('ha-next').onclick = playNext;
     document.getElementById('ha-mode').onclick = toggleMode;
 
-    await playSong(name, artist);
-    const progress = document.getElementById('ha-progress');
-
-// 实时更新播放进度
-Music_Audio.ontimeupdate = () => {
-  if (!Music_Audio.duration) return;
-  progress.value = (Music_Audio.currentTime / Music_Audio.duration) * 100;
-};
-
-// 用户拖动进度条
-progress.oninput = e => {
-  if (!Music_Audio.duration) return;
-  const pct = e.target.value / 100;
-  Music_Audio.currentTime = pct * Music_Audio.duration;
-};
+    // 🔧 关键修复: 如果是从悬浮栏返回,不重新播放
+    if (skipPlay) {
+      // 恢复歌词显示
+      if (Lyrics_Data.length > 0) {
+        renderLyrics();
+      } else {
+        const lyricBox = document.getElementById('ha-music-lyrics');
+        if (lyricBox) {
+          lyricBox.innerHTML = '<div style="padding:20px;color:#666;">暂无歌词</div>';
+        }
+      }
+      
+      // 恢复播放按钮状态
+      const playBtn = document.getElementById('ha-play');
+      if (playBtn) {
+        playBtn.textContent = Music_Audio.paused ? '▶️' : '⏸️';
+      }
+      
+      // 恢复进度条
+      const progress = document.getElementById('ha-progress');
+      if (progress && Music_Audio.duration) {
+        progress.value = (Music_Audio.currentTime / Music_Audio.duration) * 100;
+      }
+      
+      // 重新绑定进度条事件
+      if (progress) {
+        progress.oninput = e => {
+          if (!Music_Audio.duration) return;
+          const pct = e.target.value / 100;
+          Music_Audio.currentTime = pct * Music_Audio.duration;
+        };
+      }
+    } else {
+      // 首次播放
+      await playSong(name, artist);
+      
+      const progress = document.getElementById('ha-progress');
+      if (progress) {
+        progress.oninput = e => {
+          if (!Music_Audio.duration) return;
+          const pct = e.target.value / 100;
+          Music_Audio.currentTime = pct * Music_Audio.duration;
+        };
+      }
+    }
   }
 
   function toggleMode() {
@@ -4607,23 +5308,27 @@ progress.oninput = e => {
     const label =
       Music_Mode === 'sequence' ? '🔁 顺序播放' :
       Music_Mode === 'random' ? '🔀 随机播放' : '🔂 单曲循环';
-    document.getElementById('ha-mode').textContent = label;
+    const modeBtn = document.getElementById('ha-mode');
+    if (modeBtn) modeBtn.textContent = label;
   }
 
   function togglePlay() {
+    const playBtn = document.getElementById('ha-play');
     if (Music_Audio.paused) {
       Music_Audio.play();
-      document.getElementById('ha-play').textContent = '⏸️';
+      if (playBtn) playBtn.textContent = '⏸️';
+      Is_Currently_Playing = true;
     } else {
       Music_Audio.pause();
-      document.getElementById('ha-play').textContent = '▶️';
+      if (playBtn) playBtn.textContent = '▶️';
+      Is_Currently_Playing = false;
     }
   }
 
   function playPrev() {
     if (Music_List.length === 0) return;
     Music_Index = (Music_Index - 1 + Music_List.length) % Music_List.length;
-    openMusicPlayer(Music_List[Music_Index]);
+    openMusicPlayer(Music_List[Music_Index].name, Music_List[Music_Index].artist);
   }
 
   function playNext() {
@@ -4632,288 +5337,361 @@ progress.oninput = e => {
       Music_Index = Math.floor(Math.random() * Music_List.length);
     else
       Music_Index = (Music_Index + 1) % Music_List.length;
-    openMusicPlayer(Music_List[Music_Index]);
+    openMusicPlayer(Music_List[Music_Index].name, Music_List[Music_Index].artist);
   }
 
-  // 更新 playSong 函数
-async function playSong(name, artist) {
-  const keyword = `${name}-${artist}`.trim();
-  const lyricBox = document.getElementById('ha-music-lyrics');
-  lyricBox.textContent = '🎶 正在加载歌词...';
+  // ==================== 播放歌曲 ====================
   
-  // 获取歌词
-  const lyricData = await getLyricsData(keyword);
-  Lyrics_Data = parseLRC(lyricData.lrc);
-  
-  // 初始化歌词显示
-  if (Lyrics_Data.length > 0) {
-    renderLyrics();
-  } else {
-    lyricBox.textContent = '暂无歌词';
-  }
-  
-  // 加载音乐
-  let url = await getMusicUrl(keyword);
-  if (!url) {
-    lyricBox.textContent = '找不到音源';
-    return;
-  }
-  
-  Music_Audio.src = url;
-  Music_Audio.play();
-  document.getElementById('ha-play').textContent = '⏸️';
-  
-  // 绑定时间更新事件
-  Music_Audio.ontimeupdate = updateLyrics;
-}
-
-// 新的获取歌词函数，返回原始数据
-async function getLyricsData(keyword) {
-  try {
-    const searchRes = await fetch(`https://api.vkeys.cn/v2/music/netease?word=${encodeURIComponent(keyword)}`);
-    const searchData = await searchRes.json();
-    const songId = searchData?.data?.[0]?.id;
+  async function playSong(name, artist) {
+    const lyricBox = document.getElementById('ha-music-lyrics');
+    if (!lyricBox) {
+      debug('找不到歌词容器');
+      return;
+    }
     
-    if (!songId) {
+    // 🔧 保存当前播放歌曲
+    Current_Playing_Song = { name, artist };
+    Is_Currently_Playing = true;
+    
+    debug(`[播放] ${name} - ${artist}`);
+    
+    Lyrics_Data = [];
+    Current_Lyric_Index = -1;
+    
+    lyricBox.innerHTML = '<div style="padding:20px;color:#999;text-align:center;">🎶 加载中...</div>';
+    
+    try {
+      const lyricData = await getLyricsData(name, artist);
+      Lyrics_Data = parseLRC(lyricData.lrc);
+      
+      if (Lyrics_Data.length > 0) {
+        renderLyrics();
+        debug(`[歌词] 已加载 ${Lyrics_Data.length} 行`);
+      } else {
+        lyricBox.innerHTML = '<div style="padding:20px;color:#666;text-align:center;">暂无歌词</div>';
+      }
+      
+      const loadingTip = document.createElement('div');
+      loadingTip.id = 'music-loading-indicator';
+      loadingTip.style.cssText = `
+        position: sticky;
+        bottom: 0;
+        background: rgba(248,248,255,0.95);
+        backdrop-filter: blur(5px);
+        padding: 12px;
+        text-align: center;
+        color: #4169E1;
+        font-size: 12px;
+      `;
+      loadingTip.innerHTML = '🔍 正在搜索音源...<br><span style="font-size:10px;color:#999;">网易云 / QQ音乐</span>';
+      lyricBox.appendChild(loadingTip);
+      
+      const url = await getMusicUrl(name, artist);
+      
+      const indicator = document.getElementById('music-loading-indicator');
+      if (indicator) indicator.remove();
+      
+      if (!url) {
+        const errorTip = document.createElement('div');
+        errorTip.style.cssText = `
+          margin: 15px 10px;
+          padding: 12px;
+          background: rgba(255,107,107,0.1);
+          border: 1px solid rgba(255,107,107,0.3);
+          border-radius: 8px;
+          color: #ff6b6b;
+          text-align: center;
+          font-size: 13px;
+        `;
+        errorTip.innerHTML = '❌ 找不到可用音源<br><span style="font-size:11px;color:#999;">已尝试: 网易云、QQ音乐</span>';
+        lyricBox.appendChild(errorTip);
+        toaster(`找不到音源: ${name} - ${artist}`, 'error');
+        return;
+      }
+      
+      Music_Audio.src = url;
+      await Music_Audio.play();
+      
+      const playBtn = document.getElementById('ha-play');
+      if (playBtn) playBtn.textContent = '⏸️';
+      
+      Music_Audio.ontimeupdate = updateLyrics;
+      
+      toaster(`🎵 ${name} - ${artist}`, 'success');
+      
+    } catch (error) {
+      debug('[播放] 异常:', error);
+      lyricBox.innerHTML = `<div style="padding:20px;color:#ff6b6b;text-align:center;">❌ 加载失败</div>`;
+      toaster('播放失败', 'error');
+    }
+  }
+
+  // ==================== 获取歌词数据 ====================
+  
+  async function getLyricsData(name, artist) {
+    try {
+      const cleanName = (name || '').replace(/\s/g, "");
+      const cleanArtist = (artist || '').replace(/\s/g, "");
+      const keyword = cleanArtist ? `${cleanName}-${cleanArtist}` : cleanName;
+      
+      const searchRes = await fetch(`https://api.vkeys.cn/v2/music/netease?word=${encodeURIComponent(keyword)}`);
+      const searchData = await searchRes.json();
+      
+      if (!searchData?.data?.length) return { lrc: '', tlyric: '' };
+      
+      const songId = searchData.data[0].id;
+      const lyricRes = await fetch(`https://api.vkeys.cn/v2/music/netease/lyric?id=${songId}`);
+      const lyricData = await lyricRes.json();
+      
+      return {
+        lrc: lyricData?.data?.lrc || lyricData?.data?.lyric || '',
+        tlyric: lyricData?.data?.trans || lyricData?.data?.tlyric || ''
+      };
+    } catch (error) {
+      debug('[歌词] 获取失败:', error);
       return { lrc: '', tlyric: '' };
     }
-    
-    const lyricRes = await fetch(`https://api.vkeys.cn/v2/music/netease/lyric?id=${songId}`);
-    const lyricData = await lyricRes.json();
-    
-    return {
-      lrc: lyricData?.data?.lrc || lyricData?.data?.lyric || '',
-      tlyric: lyricData?.data?.trans || lyricData?.data?.tlyric || ''
-    };
-  } catch (error) {
-    console.error("getLyricsData 失败:", error);
-    return { lrc: '', tlyric: '' };
   }
-}
 
-// 渲染歌词列表
-function renderLyrics() {
-  const lyricBox = document.getElementById('ha-music-lyrics');
-  lyricBox.innerHTML = '';
+  // ==================== 渲染歌词 ====================
   
-  Lyrics_Data.forEach((item, index) => {
-    const div = document.createElement('div');
-    div.className = 'lyric-line';
-    div.setAttribute('data-index', index);
-    div.textContent = item.text;
-    div.style.cssText = `
-      padding: 8px 0;
-      color: #999;
-      transition: all 0.3s ease;
-      cursor: pointer;
-    `;
+  function renderLyrics() {
+    const lyricBox = document.getElementById('ha-music-lyrics');
+    if (!lyricBox) return;
     
-    // 点击歌词跳转
-    div.onclick = () => {
-      if (Music_Audio.duration) {
-        Music_Audio.currentTime = item.time;
+    lyricBox.innerHTML = '';
+    
+    if (Lyrics_Data.length === 0) {
+      lyricBox.innerHTML = '<div style="padding:20px;color:#666;">暂无歌词</div>';
+      return;
+    }
+    
+    const fragment = document.createDocumentFragment();
+    
+    Lyrics_Data.forEach((item, index) => {
+      const div = document.createElement('div');
+      div.className = 'lyric-line';
+      div.setAttribute('data-index', index);
+      div.textContent = item.text;
+      div.style.cssText = `
+        padding: 8px 4px;
+        color: #B0C4DE;
+        font-size: 13px;
+        line-height: 1.6;
+        transition: all 0.3s ease;
+        cursor: pointer;
+      `;
+      
+      div.onclick = () => {
+        if (Music_Audio.duration && !isNaN(Music_Audio.duration)) {
+          Music_Audio.currentTime = item.time;
+        }
+      };
+      
+      fragment.appendChild(div);
+    });
+    
+    lyricBox.appendChild(fragment);
+  }
+
+  // ==================== 更新歌词高亮 ====================
+  
+  function updateLyrics() {
+    if (!Music_Audio.duration || Lyrics_Data.length === 0) return;
+    
+    const currentTime = Music_Audio.currentTime;
+    const progress = document.getElementById('ha-progress');
+    
+    if (progress && !isNaN(Music_Audio.duration)) {
+      progress.value = (currentTime / Music_Audio.duration) * 100;
+    }
+    
+    let targetIndex = -1;
+    for (let i = Lyrics_Data.length - 1; i >= 0; i--) {
+      if (currentTime >= Lyrics_Data[i].time) {
+        targetIndex = i;
+        break;
       }
-    };
-    
-    lyricBox.appendChild(div);
-  });
-}
-
-// 更新歌词高亮和滚动
-function updateLyrics() {
-  if (!Music_Audio.duration || Lyrics_Data.length === 0) return;
-  
-  const currentTime = Music_Audio.currentTime;
-  const progress = document.getElementById('ha-progress');
-  
-  // 更新进度条
-  if (progress) {
-    progress.value = (currentTime / Music_Audio.duration) * 100;
-  }
-  
-  // 找到当前应该高亮的歌词
-  let targetIndex = -1;
-  for (let i = Lyrics_Data.length - 1; i >= 0; i--) {
-    if (currentTime >= Lyrics_Data[i].time) {
-      targetIndex = i;
-      break;
     }
-  }
-  
-  // 如果索引没变，不需要更新
-  if (targetIndex === Current_Lyric_Index) return;
-  
-  Current_Lyric_Index = targetIndex;
-  const lyricBox = document.getElementById('ha-music-lyrics');
-  const lines = lyricBox.querySelectorAll('.lyric-line');
-  
-  lines.forEach((line, index) => {
-    if (index === targetIndex) {
-      // 当前行高亮
-      line.style.color = '	#4169E1';
-      line.style.fontSize = '15px';
-      line.style.fontWeight = 'bold';
+    
+    if (targetIndex === Current_Lyric_Index) return;
+    
+    Current_Lyric_Index = targetIndex;
+    
+    const lyricBox = document.getElementById('ha-music-lyrics');
+    if (lyricBox) {
+      const lines = lyricBox.querySelectorAll('.lyric-line');
       
-      // 滚动到中间位置
-      const containerHeight = lyricBox.clientHeight;
-      const lineTop = line.offsetTop;
-      const lineHeight = line.offsetHeight;
-      const scrollTarget = lineTop - (containerHeight / 2) + (lineHeight / 2);
-      
-      lyricBox.scrollTo({
-        top: scrollTarget,
-        behavior: 'smooth'
+      lines.forEach((line, index) => {
+        if (index === targetIndex) {
+          line.style.color = '#4169E1';
+          line.style.fontSize = '15px';
+          line.style.fontWeight = 'bold';
+          line.style.transform = 'scale(1.05)';
+          
+          const containerHeight = lyricBox.clientHeight;
+          const lineTop = line.offsetTop;
+          const lineHeight = line.offsetHeight;
+          const scrollTarget = lineTop - (containerHeight / 2) + (lineHeight / 2);
+          
+          lyricBox.scrollTo({
+            top: Math.max(0, scrollTarget),
+            behavior: 'smooth'
+          });
+        } else {
+          line.style.color = '#B0C4DE';
+          line.style.fontSize = '13px';
+          line.style.fontWeight = 'normal';
+          line.style.transform = 'scale(1)';
+        }
       });
-    } else {
-      // 其他行恢复正常
-      line.style.color = '#B0C4DE';
-      line.style.fontSize = '13px';
-      line.style.fontWeight = 'normal';
     }
-  });
-}
-
-// 修改播放器 UI 中的歌词容器样式
-async function openMusicPlayer(songObj) {
-  const { name, artist } = songObj;
-  let existing = document.getElementById('ha-music-popup');
-  if (existing) existing.remove();
-
-  const popup = document.createElement('div');
-  popup.id = 'ha-music-popup';
-  popup.innerHTML = `
-  <div style="
-    background:#F8F8FF;color:#fff;border-radius:12px;
-    width:90%;max-width:420px;max-height:80vh;
-    position:absolute;left:50%;top:50%;
-    transform:translate(-50%,-50%);
-    box-shadow:0 4px 20px rgba(0,0,0,0.4);
-    display:flex;flex-direction:column;
-    overflow:hidden;z-index:99999;">
-    <div style="padding:10px 16px;font-weight:600;color:#778899;display:flex;justify-content:space-between;align-items:center;">
-      <span>🎵 ${name} - ${artist}</span>
-      <button id="ha-music-close" style="background:none;border:none;color:#778899;font-size:18px;">✖</button>
-    </div>
-    <div id="ha-music-lyrics" style="
-      flex:1;
-      padding:20px;
-      font-size:13px;
-      overflow-y:auto;
-      overflow-x:hidden;
-      text-align:center;
-      color:#ccc;
-      scroll-behavior:smooth;
-    ">加载歌词中...</div>
     
-    <!-- 🎚️ 播放进度条 -->
-    <div style="padding:6px 10px;">
-      <input type="range" id="ha-progress" min="0" max="100" value="0" step="0.1" style="width:100%;">
-    </div>
+    updateFloatLyric();
+  }
 
-    <div style="padding:8px;border-top:1px solid #444;display:flex;align-items:center;justify-content:center;gap:12px;">
-      <button id="ha-prev" class="ha-btn">⏮️</button>
-      <button id="ha-play" class="ha-btn">▶️</button>
-      <button id="ha-next" class="ha-btn">⏭️</button>
-    </div>
-    <div style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;">
-      <button id="ha-mode" class="ha-btn" style="font-size:13px;">🔁 顺序播放</button>
-      <input type="range" id="ha-volume" min="0" max="1" step="0.01" value="0.7" style="width:120px;">
-    </div>
-  </div>`;
-  document.body.appendChild(popup);
-
-  document.getElementById('ha-music-close').onclick = () => {
-    popup.remove();
-    // 清理定时器
-    if (Lyric_Timer) {
-      clearInterval(Lyric_Timer);
-      Lyric_Timer = null;
+  Music_Audio.onended = () => {
+    if (Music_Mode === 'single') {
+      Music_Audio.play();
+    } else {
+      playNext();
     }
   };
-  
-  document.getElementById('ha-volume').oninput = e => (Music_Audio.volume = e.target.value);
-  document.getElementById('ha-play').onclick = togglePlay;
-  document.getElementById('ha-prev').onclick = playPrev;
-  document.getElementById('ha-next').onclick = playNext;
-  document.getElementById('ha-mode').onclick = toggleMode;
 
-  await playSong(name, artist);
+  // ==================== 获取音源 ====================
   
-  const progress = document.getElementById('ha-progress');
-  // 用户拖动进度条
-  progress.oninput = e => {
-    if (!Music_Audio.duration) return;
-    const pct = e.target.value / 100;
-    Music_Audio.currentTime = pct * Music_Audio.duration;
-  };
-}
+  async function checkAudioAvailability(url) {
+    return new Promise((resolve) => {
+      const tester = new Audio();
+      let timer;
 
-// 音频结束时处理
-Music_Audio.onended = () => {
-  if (Music_Mode === 'single') {
-    Music_Audio.play();
-  } else {
-    playNext();
+      const onLoaded = () => {
+        cleanup();
+        resolve(true);
+      };
+
+      const onError = () => {
+        cleanup();
+        resolve(false);
+      };
+
+      const cleanup = () => {
+        tester.removeEventListener('loadedmetadata', onLoaded);
+        tester.removeEventListener('error', onError);
+        clearTimeout(timer);
+        tester.src = '';
+      };
+
+      tester.preload = 'metadata';
+      tester.src = url;
+      timer = setTimeout(onError, 3000);
+
+      tester.addEventListener('loadedmetadata', onLoaded);
+      tester.addEventListener('error', onError);
+    });
   }
-};
 
-  
+  async function getMusicUrl(name, artist = '') {
+    const cleanName = (name || '').replace(/\s/g, "");
+    const cleanArtist = (artist || '').replace(/\s/g, "");
+    const keyword = cleanArtist ? `${cleanName}-${cleanArtist}` : cleanName;
+    
+    debug(`[音源] 搜索: ${keyword}`);
 
-  async function getMusicUrl(keyword) {
+    let url = await tryNetease(keyword);
+    if (url) return url;
+
+    debug(`[音源] 网易云失败,尝试QQ音乐`);
+    url = await tryTencent(keyword);
+    if (url) return url;
+
+    if (cleanArtist) {
+      debug(`[音源] 尝试仅用歌名`);
+      url = await tryNetease(cleanName);
+      if (url) return url;
+
+      url = await tryTencent(cleanName);
+      if (url) return url;
+    }
+
+    debug(`[音源] 所有方案失败`);
+    return '';
+  }
+
+  async function tryNetease(keyword) {
     try {
-      const res = await fetch(`https://api.vkeys.cn/v2/music/netease?word=${keyword}`);
-      const data = await res.json();
-      if (!data?.data?.length) return '';
-      const id = data.data[0].id;
-      const r2 = await fetch(`https://api.vkeys.cn/v2/music/netease?id=${id}`);
-      const d2 = await r2.json();
-      return d2?.data?.url || '';
-    } catch {
+      const searchRes = await fetch(`https://api.vkeys.cn/v2/music/netease?word=${encodeURIComponent(keyword)}`);
+      const searchData = await searchRes.json();
+      
+      if (!searchData?.data?.length) return '';
+
+      const ids = searchData.data.map(item => item.id).filter(Boolean);
+
+      for (const id of ids) {
+        try {
+          const detailRes = await fetch(`https://api.vkeys.cn/v2/music/netease?id=${id}`);
+          const detailData = await detailRes.json();
+          const url = detailData?.data?.url;
+
+          if (url && await checkAudioAvailability(url)) {
+            debug(`[网易云] ✅ ID=${id}`);
+            return url;
+          }
+        } catch (e) {
+          debug(`[网易云] ID=${id} 失败`, e);
+        }
+      }
+      return '';
+    } catch (error) {
+      debug('[网易云] 异常', error);
       return '';
     }
   }
 
-  async function getLyrics(keyword) {
-  try {
-    // 先通过关键词搜索歌曲，获取网易云音乐的歌曲 ID
-    const searchRes = await fetch(`https://api.vkeys.cn/v2/music/netease?word=${encodeURIComponent(keyword)}`);
-    const searchData = await searchRes.json();
-    const songId = searchData?.data?.[0]?.id;
-    if (!songId) {
-      console.warn("getLyrics: 未找到对应歌曲ID");
-      return '暂无歌词';
+  async function tryTencent(keyword) {
+    try {
+      const searchRes = await fetch(`https://api.vkeys.cn/v2/music/tencent?word=${encodeURIComponent(keyword)}`);
+      const searchData = await searchRes.json();
+      
+      if (!searchData?.data?.length) return '';
+
+      const ids = [];
+      for (const item of searchData.data) {
+        if (item.id && !String(item.song || '').match(/live/gi)) {
+          ids.push(item.id);
+        }
+        if (item.grp) {
+          for (const grp of item.grp) {
+            if (grp.id && !String(grp.song || '').match(/live/gi)) {
+              ids.push(grp.id);
+            }
+          }
+        }
+      }
+
+      for (const id of ids) {
+        try {
+          const detailRes = await fetch(`https://api.vkeys.cn/v2/music/tencent?id=${id}`);
+          const detailData = await detailRes.json();
+          const url = detailData?.data?.url;
+
+          if (url && await checkAudioAvailability(url)) {
+            debug(`[QQ音乐] ✅ ID=${id}`);
+            return url;
+          }
+        } catch (e) {
+          debug(`[QQ音乐] ID=${id} 失败`, e);
+        }
+      }
+      return '';
+    } catch (error) {
+      debug('[QQ音乐] 异常', error);
+      return '';
     }
-
-    // 使用网易云歌词接口获取歌词和翻译
-    const lyricRes = await fetch(`https://api.vkeys.cn/v2/music/netease/lyric?id=${songId}`);
-    const lyricData = await lyricRes.json();
-
-    // 网易云歌词接口返回字段格式： data.lrc, data.lyric, data.trans, data.tlyric
-    const lrcText = lyricData?.data?.lrc || lyricData?.data?.lyric;
-    const transText = lyricData?.data?.trans || lyricData?.data?.tlyric;
-
-    // 处理歌词文本
-    if (!lrcText) {
-      console.warn("getLyrics: 无歌词文本", lyricData);
-      return '暂无歌词';
-    }
-
-    // 合并中英文歌词（如果有翻译）
-    let lyricResult = lrcText;
-    if (transText) {
-      lyricResult += '\n\n---- 翻译 ----\n' + transText;
-    }
-
-    return lyricResult;
-  } catch (error) {
-    console.error("getLyrics 失败:", error);
-    return '歌词加载失败';
   }
-}
 
-
-
-  // 世界书接口部分
+  // ==================== 世界书接口 ====================
+  
   async function findHealthWorldFile() {
     try {
       const moduleWI = await import('/scripts/world-info.js');
@@ -5150,13 +5928,22 @@ async function showClearBook() {
   }
 
   async function clearMental(){
+    // 清除所有心理健康相关数据
     ctx.extensionSettings[MODULE_NAME].mental = [];
     ctx.extensionSettings[MODULE_NAME].meditation = [];
+    ctx.extensionSettings[MODULE_NAME].thoughtChains = [];
+    ctx.extensionSettings[MODULE_NAME].confessions = [];
     saveSettings();
+    
+    // 清除所有相关世界书条目
     await clearWorldEntry('心理');
     await clearWorldEntry('冥想');
     await clearWorldEntry('思维链');
-    alert('心理已清空');
+    await clearWorldEntry('忏悔');
+    await clearWorldEntry('注意力转移');
+    
+    debugLog('心理健康数据已全部清空: mental, meditation, thoughtChains, confessions');
+    alert('心理数据已清空(包括情绪、冥想、思维链、忏悔、注意力转移)');
   }
 
   async function clearExercise(){
@@ -5195,29 +5982,36 @@ async function showClearBook() {
   }
 
   async function clearWardrobe(){
-    ctx.extensionSettings[MODULE_NAME].wardrobe = [];
+    ctx.extensionSettings[MODULE_NAME].wardrobe = {
+      items: [],
+      tags: {
+        top: [],
+        bottom: [],
+        shoes: [],
+        accessory: [],
+        outfit: []
+      }
+    };
     saveSettings();
     clearLocalStorage('wardrobe');
     await clearWorldEntry('衣柜');
     alert('衣柜已清空');
   }
 
- async function clearFinance() {
-    // finance 应该包含 incomeTags, expenseTags 和 records
+  async function clearFinance() {
     ctx.extensionSettings[MODULE_NAME].finance = {
-        incomeTags: [],
-        expenseTags: [],
-        records: []
+      incomeTags: [],
+      expenseTags: [],
+      records: []
     };
     saveSettings();
     clearLocalStorage('ha-finance');
     await clearWorldEntry('收入');
     await clearWorldEntry('支出');
     alert('财务数据已清除');
-}
+  }
 
   async function clearPomodoro(){
-    // pomodoro 应该是对象而不是数组
     ctx.extensionSettings[MODULE_NAME].pomodoro = {
       timeBlocks: [],
       tagBlocks: [],
@@ -5249,45 +6043,55 @@ async function showClearBook() {
     alert('音乐已清空');
   }
 
- async function clearAll(){
+  async function clearAll(){
     // 清除各模块数据，但保留正确的数据结构
     ctx.extensionSettings[MODULE_NAME].sleep = [];
     ctx.extensionSettings[MODULE_NAME].diet = [];
     ctx.extensionSettings[MODULE_NAME].mental = [];
     ctx.extensionSettings[MODULE_NAME].meditation = [];
+    ctx.extensionSettings[MODULE_NAME].thoughtChains = [];
+    ctx.extensionSettings[MODULE_NAME].confessions = [];
     ctx.extensionSettings[MODULE_NAME].exercise = [];
     ctx.extensionSettings[MODULE_NAME].wishes = [];
     ctx.extensionSettings[MODULE_NAME].social = {};
     ctx.extensionSettings[MODULE_NAME].todo = [];
     ctx.extensionSettings[MODULE_NAME].memo = [];
 
-    // wardrobe 应该是对象，包含 items 和 tags
     ctx.extensionSettings[MODULE_NAME].wardrobe = {
-        items: [],
-        tags: {
-            top: [],
-            bottom: [],
-            shoes: [],
-            accessory: [],
-            outfit: []
-        }
+      items: [],
+      tags: {
+        top: [],
+        bottom: [],
+        shoes: [],
+        accessory: [],
+        outfit: []
+      }
     };
 
-    // finance 应该是对象，包含 income 和 expense
     ctx.extensionSettings[MODULE_NAME].finance = {
-        incomeTags: [],
-        expenseTags: [],
-        records: []
+      incomeTags: [],
+      expenseTags: [],
+      records: []
     };
 
-
-    ctx.extensionSettings[MODULE_NAME].pomodoro = [];
+    ctx.extensionSettings[MODULE_NAME].pomodoro = {
+      timeBlocks: [],
+      tagBlocks: [],
+      records: [],
+      selectedTimeBlock: null,
+      selectedTag: null,
+      session: null,
+      tagDeleteMode: false,
+      timeDeleteMode: false,
+      notifyConfig: {
+        vibrate: true,
+        ring: true,
+        ringUrl: ''
+      }
+    };
+    
     ctx.extensionSettings[MODULE_NAME].music = [];
 
-    // 不要清除 apiConfig！这是关键配置
-    // ctx.extensionSettings[MODULE_NAME].apiConfig = {}; // 删除这行
-
-    // 保存设置
     saveSettings();
 
     // 清除 localStorage
@@ -5300,9 +6104,11 @@ async function showClearBook() {
     await clearWorldEntry('睡眠');
     await clearWorldEntry('饮食');
     await clearWorldEntry('心理');
-    await clearWorldEntry('运动');
     await clearWorldEntry('冥想');
     await clearWorldEntry('思维链');
+    await clearWorldEntry('忏悔');
+    await clearWorldEntry('注意力转移');
+    await clearWorldEntry('运动');
     await clearWorldEntry('心愿');
     await clearWorldEntry('习惯');
     await clearWorldEntry('待办');
@@ -5316,40 +6122,7 @@ async function showClearBook() {
     await clearWorldEntry('🖤音乐');
 
     alert('全部数据已清空（保留API配置）');
-}
-
-// 同时修复各个单独的清除函数
-async function clearWardrobe(){
-    // wardrobe 应该是对象而不是数组
-    ctx.extensionSettings[MODULE_NAME].wardrobe = {
-        items: [],
-        tags: {
-            top: [],
-            bottom: [],
-            shoes: [],
-            accessory: [],
-            outfit: []
-        }
-    };
-    saveSettings();
-    clearLocalStorage('wardrobe');
-    await clearWorldEntry('衣柜');
-    alert('衣柜已清空');
-}
-
-async function clearFinance(){
-    // finance 应该是对象而不是数组
-    ctx.extensionSettings[MODULE_NAME].finance = {
-        income: [],
-        expense: []
-    };
-    saveSettings();
-    clearLocalStorage('finance');
-    await clearWorldEntry('收入');
-    await clearWorldEntry('支出');
-    alert('收支已清空');
-}
-
+  }
 
   // 解析文本日期时间格式 "2025/10/12 15:05:36"
   function parseTextDate(line) {
@@ -5396,19 +6169,19 @@ async function clearFinance(){
     const worldInfo = await moduleWI.loadWorldInfo(fileId);
     const entries = worldInfo.entries || {};
 
-    // 规律作息(sleep)、健康饮食(diet)、心理健康(mental)、适度运动(exercise)、冥想(meditation)、思维链、memo
-    // 按照时间删除，localStorage和世界书条目都要删除
+    // 时间相关模块 - 按照时间删除localStorage和世界书
     const timeBasedModules = {
       '睡眠': 'sleep',
       '饮食': 'diet',
       '心理': 'mental',
-      '运动': 'exercise',
       '冥想': 'meditation',
-      '思维链': 'mental',
+      '思维链': 'thoughtChains',
+      '忏悔': 'confessions',
+      '运动': 'exercise',
       'memo': 'memo'
     };
     
-    for (const [entryName, module] of Object.entries(timeBasedModules)) {
+    for (const [entryName, storageKey] of Object.entries(timeBasedModules)) {
       // 查找对应的世界书条目
       let targetUID = null;
       let targetEntry = null;
@@ -5453,7 +6226,19 @@ async function clearFinance(){
         debugLog(`${entryName}: 删除 ${removed} 条过期数据，剩余 ${filteredLines.length} 行`);
         const newContent = filteredLines.join('\n');
         await updateWorldEntry(entryName, newContent);
-        clearLocalStorage(module);
+        
+        // 同时清除localStorage中的过期数据
+        if (settings[storageKey] && Array.isArray(settings[storageKey])) {
+          const originalLength = settings[storageKey].length;
+          settings[storageKey] = settings[storageKey].filter(item => {
+            const itemDate = item.ts ? new Date(item.ts) : null;
+            return !itemDate || itemDate.getTime() >= cutoffTime;
+          });
+          const removedFromStorage = originalLength - settings[storageKey].length;
+          if (removedFromStorage > 0) {
+            debugLog(`${storageKey}: 从localStorage删除 ${removedFromStorage} 条过期数据`);
+          }
+        }
       }
     }
 
@@ -5522,6 +6307,10 @@ async function clearFinance(){
       await clearWorldEntry('衣柜');
       debugLog('衣柜世界书条目已清空');
     }
+
+    // 注意力转移: 清空世界书条目
+    await clearWorldEntry('注意力转移');
+    debugLog('注意力转移世界书条目已清空');
 
     // 收支平衡(finance)、心愿清单(wishes)、音乐(music): 不删除
     debugLog(`finance, wishes, music: 跳过清除（保留所有数据）`);
@@ -5638,7 +6427,6 @@ async function clearFinance(){
   loadClearMode();
   setupAutoClear();
 }
-
 
 
 
