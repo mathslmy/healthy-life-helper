@@ -6,22 +6,24 @@
 /* ========== 1. 悬浮按钮 ========== */
 #health-assistant-fab {
   position: fixed;
-  left: 0px;
-  top: 30px;
+  right: 10px;
+  bottom: 80px;
   z-index: 999999;
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  font-size: 22px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  font-size: 24px;
   user-select: none;
-  background: transparent;
-  color: #000;
-  transition: transform 0.2s;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: grab;
+  touch-action: none;
 }
 
 #health-assistant-fab:hover {
@@ -32,18 +34,18 @@
 #health-assistant-panel {
   position: fixed;
   left: 50%;
-  transform: translateX(-50%);
-  top: 64px;
+  top: 50%;
+  transform: translate(-50%, -50%);
   z-index: 99999;
-  width: min(370px, 95vw);
-  max-height: 90vh;
+  width: min(400px, 95vw);
+  max-height: 85vh;
   overflow: auto;
   background: #ffffff;
-  border-radius: 10px;
-  box-shadow: 0 12px 36px rgba(0,0,0,0.15);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.2);
   padding: 16px;
   display: none;
-  font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color: #000000;
 }
 

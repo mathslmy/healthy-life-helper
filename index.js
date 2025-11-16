@@ -42,8 +42,10 @@ function ready(fn) {
 
 // 初始化扩展
 ready(() => {
+  console.log('[健康生活助手] 开始初始化...');
   try {
     const ctx = SillyTavern.getContext();
+    console.log('[健康生活助手] 获取 context 成功');
 
     // 初始化 extensionSettings 存储
     if (!ctx.extensionSettings[MODULE_NAME]) {
@@ -262,16 +264,23 @@ ready(() => {
     }
 
     // 创建 DOM
-    if (document.getElementById('health-assistant-fab')) return;
+    if (document.getElementById('health-assistant-fab')) {
+      console.log('[健康生活助手] FAB 已存在，跳过初始化');
+      return;
+    }
+
+    console.log('[健康生活助手] 开始创建 DOM 元素...');
 
     const fab = document.createElement('div');
     fab.id = 'health-assistant-fab';
     fab.title = '健康生活助手';
     fab.innerText = '🍀';
     document.body.appendChild(fab);
+    console.log('[健康生活助手] FAB 按钮已添加到页面');
 
     // 启用拖动
     enableDrag(fab);
+    console.log('[健康生活助手] 拖动功能已启用');
 
     const panel = document.createElement('div');
     panel.id = 'health-assistant-panel';
@@ -306,6 +315,7 @@ ready(() => {
       </div>
     `;
     document.body.appendChild(panel);
+    console.log('[健康生活助手] 主面板已添加到页面');
 
     // 更新时钟
     const dtEl = panel.querySelector('#ha-datetime');
@@ -318,7 +328,9 @@ ready(() => {
 
     // 面板切换
     fab.addEventListener('click', () => {
-      panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+      const newDisplay = panel.style.display === 'block' ? 'none' : 'block';
+      panel.style.display = newDisplay;
+      console.log('[健康生活助手] 面板切换为:', newDisplay);
     });
 
     // 简单的 helper：保存 settings
@@ -338,6 +350,7 @@ ready(() => {
     panel.querySelectorAll('.ha-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const key = btn.dataset.key;
+        console.log('[健康生活助手] 点击按钮:', key);
         if (key === 'routine') showRoutine(MODULE_NAME, ctx, saveSettings, debugLog, content);
         else if (key === 'diet') showDiet(MODULE_NAME, ctx, saveSettings, debugLog, content);
         else if (key === 'mental') showMental(MODULE_NAME, ctx, saveSettings, debugLog, content);
@@ -354,6 +367,8 @@ ready(() => {
         else if (key === 'apiconf') showApiConfig(MODULE_NAME, ctx, saveSettings, debugLog, content);
       });
     });
+
+    console.log('[健康生活助手] 初始化完成！');
 
   } catch (err) {
     console.error('健康生活助手初始化失败', err);
