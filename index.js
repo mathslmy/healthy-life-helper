@@ -1,4 +1,4 @@
-// 健康生活助手 - 最小可运行版 + 完整独立API模块升级（仅修改 index.js）
+// 健康生活助手 - 模块化版本
 
 //You'll likely need to import extension_settings, getContext, and loadExtensionSettings from extensions.js
 import { extension_settings, getContext, loadExtensionSettings } from "../../../extensions.js";
@@ -25,26 +25,26 @@ import { showBgm } from './src/showBgm.js';
 import { showClearBook } from './src/showClearBook.js';
 import { showApiConfig } from './src/showApiConfig.js';
 
-(function () {
-  const MODULE_NAME = '健康生活助手';
+const MODULE_NAME = '健康生活助手';
 
-  // 等待 SillyTavern 环境准备（若已经存在则立刻用）
-  function ready(fn) {
-    if (window.SillyTavern && SillyTavern.getContext) return fn();
-    const i = setInterval(() => {
-      if (window.SillyTavern && SillyTavern.getContext) {
-        clearInterval(i);
-        fn();
-      }
-    }, 200);
-    // 超时后仍尝试执行
-    setTimeout(fn, 5000);
-  }
+// 等待 SillyTavern 环境准备（若已经存在则立刻用）
+function ready(fn) {
+  if (window.SillyTavern && SillyTavern.getContext) return fn();
+  const i = setInterval(() => {
+    if (window.SillyTavern && SillyTavern.getContext) {
+      clearInterval(i);
+      fn();
+    }
+  }, 200);
+  // 超时后仍尝试执行
+  setTimeout(fn, 5000);
+}
 
- // 在 ready(() => { 的开始处
+// 初始化扩展
 ready(() => {
   try {
     const ctx = SillyTavern.getContext();
+
     // 初始化 extensionSettings 存储
     if (!ctx.extensionSettings[MODULE_NAME]) {
       ctx.extensionSettings[MODULE_NAME] = {
@@ -260,103 +260,102 @@ ready(() => {
         ctx.saveSettingsDebounced();
       }
     }
-    // 继续原有的DOM创建代码...
+
     // 创建 DOM
     if (document.getElementById('health-assistant-fab')) return;
 
-      const fab = document.createElement('div');
-fab.id = 'health-assistant-fab';
-fab.title = '健康生活助手';
-fab.innerText = '🍀';
-document.body.appendChild(fab);
+    const fab = document.createElement('div');
+    fab.id = 'health-assistant-fab';
+    fab.title = '健康生活助手';
+    fab.innerText = '🍀';
+    document.body.appendChild(fab);
 
-// 启用拖动
-enableDrag(fab);
+    // 启用拖动
+    enableDrag(fab);
 
-      const panel = document.createElement('div');
-      panel.id = 'health-assistant-panel';
-      panel.innerHTML = `
-        <div class="ha-header">
-          <div>
-            <div style="font-weight:600">健康生活助手</div>
-            <div id="ha-datetime" style="font-size:12px;color:#666"></div>
-          </div>
-          <div style="font-size:12px; color:#999; align-self:center">v0.1</div>
+    const panel = document.createElement('div');
+    panel.id = 'health-assistant-panel';
+    panel.innerHTML = `
+      <div class="ha-header">
+        <div>
+          <div style="font-weight:600">健康生活助手</div>
+          <div id="ha-datetime" style="font-size:12px;color:#666"></div>
         </div>
+        <div style="font-size:12px; color:#999; align-self:center">v0.1</div>
+      </div>
 
-        <div class="ha-grid">
-          <div class="ha-btn" data-key="routine">规律作息</div>
-          <div class="ha-btn" data-key="diet">健康饮食</div>
-          <div class="ha-btn" data-key="mental">心理健康</div>
-          <div class="ha-btn" data-key="exercise">适度运动</div>
-          <div class="ha-btn" data-key="wardrobe">用户衣柜</div>
-          <div class="ha-btn" data-key="finance">收支平衡</div>
-          <div class="ha-btn" data-key="wishes">心愿清单</div>
-          <div class="ha-btn" data-key="social">习惯养成</div>
-          <div class="ha-btn" data-key="todo">待办事项</div>
-          <div class="ha-btn" data-key="pomodoro">专注番茄</div>
-          <div class="ha-btn" data-key="memo">随笔备忘</div>
-          <div class="ha-btn" data-key="bgm">背景音乐</div>
-          <div class="ha-btn" data-key="apiconf">独立API</div>
-          <div class="ha-btn" data-key="clearbook">清除数据</div>
-        </div>
+      <div class="ha-grid">
+        <div class="ha-btn" data-key="routine">规律作息</div>
+        <div class="ha-btn" data-key="diet">健康饮食</div>
+        <div class="ha-btn" data-key="mental">心理健康</div>
+        <div class="ha-btn" data-key="exercise">适度运动</div>
+        <div class="ha-btn" data-key="wardrobe">用户衣柜</div>
+        <div class="ha-btn" data-key="finance">收支平衡</div>
+        <div class="ha-btn" data-key="wishes">心愿清单</div>
+        <div class="ha-btn" data-key="social">习惯养成</div>
+        <div class="ha-btn" data-key="todo">待办事项</div>
+        <div class="ha-btn" data-key="pomodoro">专注番茄</div>
+        <div class="ha-btn" data-key="memo">随笔备忘</div>
+        <div class="ha-btn" data-key="bgm">背景音乐</div>
+        <div class="ha-btn" data-key="apiconf">独立API</div>
+        <div class="ha-btn" data-key="clearbook">清除数据</div>
+      </div>
 
-        <div id="ha-content-area" class="ha-subpanel" style="display:block;">
-          <div class="ha-small">请选择一个功能</div>
-        </div>
-      `;
-      document.body.appendChild(panel);
+      <div id="ha-content-area" class="ha-subpanel" style="display:block;">
+        <div class="ha-small">请选择一个功能</div>
+      </div>
+    `;
+    document.body.appendChild(panel);
 
-      // 更新时钟
-      const dtEl = panel.querySelector('#ha-datetime');
-      function updateClock(){
-        const d = new Date();
-        dtEl.innerText = d.toLocaleString();
-      }
-      updateClock();
-      setInterval(updateClock, 1000);
-
-      // 面板切换
-      fab.addEventListener('click', () => {
-        panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
-      });
-
-      // 简单的 helper：保存 settings
-      function saveSettings() {
-        if (ctx.saveSettingsDebounced) ctx.saveSettingsDebounced();
-        else console.warn('saveSettingsDebounced not available - changes may not persist until reload');
-      }
-
-      // 调试日志（轻量）
-      function debugLog(...args) {
-        // 打开 window.DEBUG_HEALTH_ASSISTANT 可查看日志
-        if (window.DEBUG_HEALTH_ASSISTANT) console.log('[健康生活助手]', ...args);
-      }
-
-      // 打开各主面板
-      const content = panel.querySelector('#ha-content-area');
-      panel.querySelectorAll('.ha-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const key = btn.dataset.key;
-          if (key === 'routine') showRoutine(MODULE_NAME, ctx, saveSettings, debugLog, content);
-          else if (key === 'diet') showDiet(MODULE_NAME, ctx, saveSettings, debugLog, content);
-          else if (key === 'mental') showMental(MODULE_NAME, ctx, saveSettings, debugLog, content);
-          else if (key === 'exercise') showExercise(MODULE_NAME, ctx, saveSettings, debugLog, content);
-          else if (key === 'finance') showFinance(MODULE_NAME, ctx, saveSettings, debugLog, content);
-          else if (key === 'wardrobe') showWardrobe(MODULE_NAME, ctx, saveSettings, debugLog, content);
-          else if (key === 'wishes') showWishes(MODULE_NAME, ctx, saveSettings, debugLog, content);
-          else if (key === 'social') showSocial(MODULE_NAME, ctx, saveSettings, debugLog, content);
-          else if (key === 'todo') showTodo(MODULE_NAME, ctx, saveSettings, debugLog, content);
-          else if (key === 'pomodoro') showPomodoro(MODULE_NAME, ctx, saveSettings, debugLog, content);
-          else if (key === 'memo') showMemo(MODULE_NAME, ctx, saveSettings, debugLog, content);
-          else if (key === 'bgm') showBgm(MODULE_NAME, ctx, saveSettings, debugLog, content);
-          else if (key === 'clearbook') showClearBook(MODULE_NAME, ctx, saveSettings, debugLog, content);
-          else if (key === 'apiconf') showApiConfig(MODULE_NAME, ctx, saveSettings, debugLog, content);
-        });
-      });
-
-    } catch (err) {
-      console.error('健康生活助手初始化失败', err);
+    // 更新时钟
+    const dtEl = panel.querySelector('#ha-datetime');
+    function updateClock(){
+      const d = new Date();
+      dtEl.innerText = d.toLocaleString();
     }
-  });
-})();
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // 面板切换
+    fab.addEventListener('click', () => {
+      panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+    });
+
+    // 简单的 helper：保存 settings
+    function saveSettings() {
+      if (ctx.saveSettingsDebounced) ctx.saveSettingsDebounced();
+      else console.warn('saveSettingsDebounced not available - changes may not persist until reload');
+    }
+
+    // 调试日志（轻量）
+    function debugLog(...args) {
+      // 打开 window.DEBUG_HEALTH_ASSISTANT 可查看日志
+      if (window.DEBUG_HEALTH_ASSISTANT) console.log('[健康生活助手]', ...args);
+    }
+
+    // 打开各主面板
+    const content = panel.querySelector('#ha-content-area');
+    panel.querySelectorAll('.ha-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.key;
+        if (key === 'routine') showRoutine(MODULE_NAME, ctx, saveSettings, debugLog, content);
+        else if (key === 'diet') showDiet(MODULE_NAME, ctx, saveSettings, debugLog, content);
+        else if (key === 'mental') showMental(MODULE_NAME, ctx, saveSettings, debugLog, content);
+        else if (key === 'exercise') showExercise(MODULE_NAME, ctx, saveSettings, debugLog, content);
+        else if (key === 'finance') showFinance(MODULE_NAME, ctx, saveSettings, debugLog, content);
+        else if (key === 'wardrobe') showWardrobe(MODULE_NAME, ctx, saveSettings, debugLog, content);
+        else if (key === 'wishes') showWishes(MODULE_NAME, ctx, saveSettings, debugLog, content);
+        else if (key === 'social') showSocial(MODULE_NAME, ctx, saveSettings, debugLog, content);
+        else if (key === 'todo') showTodo(MODULE_NAME, ctx, saveSettings, debugLog, content);
+        else if (key === 'pomodoro') showPomodoro(MODULE_NAME, ctx, saveSettings, debugLog, content);
+        else if (key === 'memo') showMemo(MODULE_NAME, ctx, saveSettings, debugLog, content);
+        else if (key === 'bgm') showBgm(MODULE_NAME, ctx, saveSettings, debugLog, content);
+        else if (key === 'clearbook') showClearBook(MODULE_NAME, ctx, saveSettings, debugLog, content);
+        else if (key === 'apiconf') showApiConfig(MODULE_NAME, ctx, saveSettings, debugLog, content);
+      });
+    });
+
+  } catch (err) {
+    console.error('健康生活助手初始化失败', err);
+  }
+});
