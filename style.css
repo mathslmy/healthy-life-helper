@@ -391,7 +391,187 @@
   }
 }
 
-/* ========== 10. 打印样式 ========== */
+/* ========== 10. 睡眠记录管理样式 ========== */
+
+/* 睡眠记录管理遮罩层 */
+.ha-sleep-records-overlay {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  background-color: rgba(0,0,0,0);
+}
+
+/* 睡眠记录管理弹窗 */
+.ha-sleep-records-panel {
+  background: #fff;
+  padding: 12px;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+  max-width: 600px;
+  margin: auto;
+  max-height: 80vh;
+  overflow: auto;
+}
+
+/* 睡眠记录管理标题 */
+.ha-sleep-records-title {
+  font-weight: 600;
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
+/* 睡眠记录列表容器 */
+.ha-sleep-records-list {
+  max-height: 30vh;
+  overflow-y: auto;
+}
+
+/* 睡眠记录关闭按钮容器 */
+.ha-sleep-records-footer {
+  text-align: right;
+  margin-top: 12px;
+}
+
+/* 单条睡眠记录容器 */
+.ha-sleep-record-item {
+  border: 1px solid #ddd;
+  padding: 8px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  background: #f9f9f9;
+}
+
+/* 睡眠记录内容行 */
+.ha-sleep-record-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 睡眠记录信息部分 */
+.ha-sleep-record-info {
+  flex: 1;
+}
+
+/* 睡眠记录主标题 */
+.ha-sleep-record-main {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* 睡眠记录时间文本 */
+.ha-sleep-record-time {
+  font-size: 12px;
+  color: #666;
+}
+
+/* 睡眠记录状态文本 */
+.ha-sleep-record-status {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* 启用状态颜色 */
+.ha-sleep-record-status.enabled {
+  color: #4CAF50;
+}
+
+/* 禁用状态颜色 */
+.ha-sleep-record-status.disabled {
+  color: #999;
+}
+
+/* 睡眠记录按钮组 */
+.ha-sleep-record-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* 睡眠记录小按钮 */
+.ha-sleep-record-btn {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+/* 删除按钮样式 */
+.ha-sleep-record-btn.delete {
+  background: #f44336;
+  color: #fff;
+}
+
+/* 空记录提示 */
+.ha-sleep-records-empty {
+  text-align: center;
+  color: #999;
+  padding: 20px;
+}
+
+/* Routine 子面板样式 */
+.ha-routine-subpanel {
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid #ddd;
+  background: #f9f9f9;
+  white-space: pre-wrap;
+  min-height: 60px;
+  max-height: 200px;
+  overflow: auto;
+  display: block;
+}
+
+/* 手动时间对话框遮罩 */
+.ha-manual-time-overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+}
+
+/* 手动时间对话框面板 */
+.ha-manual-time-panel {
+  background: #fff;
+  padding: 8px;
+  border-radius: 6px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.12);
+  max-width: 320px;
+  margin: auto;
+}
+
+/* 手动时间对话框标题 */
+.ha-manual-time-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+/* 手动时间标签 */
+.ha-manual-time-label {
+  font-size: 13px;
+}
+
+/* 手动时间输入框 */
+.ha-manual-time-input {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 4px;
+}
+
+/* 手动时间按钮组 */
+.ha-manual-time-footer {
+  text-align: right;
+  margin-top: 8px;
+}
+
+/* ========== 11. 打印样式 ========== */
 
 @media print {
   #health-assistant-fab,
@@ -399,3 +579,166 @@
     display: none !important;
   }
 }
+
+/* ========== 12. 饮食模块样式 ========== */
+
+/* 饮食模块标题 */
+.ha-diet-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+/* 饮食按钮行容器 */
+.ha-diet-btn-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+/* 饮食按钮 - flex布局 */
+.ha-diet-btn-flex {
+  flex: 1;
+}
+
+/* 饮食子面板 */
+.ha-diet-subpanel {
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid #ddd;
+  background: #f9f9f9;
+  white-space: pre-wrap;
+  min-height: 60px;
+  max-height: 200px;
+  overflow: auto;
+  display: block;
+}
+
+/* 饮食统计弹窗 */
+.ha-diet-stats-modal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 320px;
+  max-height: 70vh;
+  background: white;
+  border: 2px solid #007acc;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 100000;
+  display: none;
+  flex-direction: column;
+}
+
+/* 饮食统计弹窗标题栏 */
+.ha-diet-stats-header {
+  padding: 12px;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 饮食统计弹窗标题文本 */
+.ha-diet-stats-title {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+/* 饮食统计弹窗关闭按钮 */
+.ha-diet-stats-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #666;
+}
+
+/* 饮食统计弹窗按钮区域 */
+.ha-diet-stats-buttons {
+  padding: 12px;
+  border-bottom: 1px solid #ddd;
+}
+
+/* 饮食统计按钮间距 */
+.ha-diet-stats-btn {
+  margin-right: 8px;
+}
+
+/* 饮食统计内容区域 */
+.ha-diet-stats-content {
+  padding: 12px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* 饮食统计空提示 */
+.ha-diet-stats-empty {
+  color: #666;
+}
+
+/* 饮食统计列表标题 */
+.ha-diet-stats-list-title {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+/* 单条饮食记录容器 */
+.ha-diet-record-item {
+  border: 1px solid #ddd;
+  padding: 8px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+}
+
+/* 饮食记录容器 - 启用状态背景 */
+.ha-diet-record-item.enabled {
+  background: #f0f8ff;
+}
+
+/* 饮食记录容器 - 禁用状态背景 */
+.ha-diet-record-item.disabled {
+  background: #f5f5f5;
+}
+
+/* 饮食记录时间行 */
+.ha-diet-record-time {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+/* 饮食记录状态徽章 - 已启用 */
+.ha-diet-record-badge-enabled {
+  color: green;
+  font-size: 12px;
+}
+
+/* 饮食记录状态徽章 - 未启用 */
+.ha-diet-record-badge-disabled {
+  color: gray;
+  font-size: 12px;
+}
+
+/* 饮食记录内容文本 */
+.ha-diet-record-text {
+  margin-bottom: 6px;
+}
+
+/* 饮食记录按钮组 */
+.ha-diet-record-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* 饮食记录操作按钮 */
+.ha-diet-record-btn {
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+/* 饮食记录删除按钮 */
+.ha-diet-record-btn-delete {
+  background: #dc3545;
+}
+

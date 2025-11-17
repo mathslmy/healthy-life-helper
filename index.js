@@ -1,15 +1,11 @@
-// 健康生活助手 - 最小可运行版 + 完整独立API模块升级（仅修改 index.js）
+// 健康生活助手 - 完整版本（包含睡眠、饮食、运动、心理健康、备忘录定期清除功能）
 
-//You'll likely need to import extension_settings, getContext, and loadExtensionSettings from extensions.js
 import { extension_settings, getContext, loadExtensionSettings } from "../../../extensions.js";
-
-//You'll likely need to import some other functions from the main script
 import { saveSettingsDebounced } from "../../../../script.js";
 
 (function () {
   const MODULE_NAME = '健康生活助手';
 
-  // 等待 SillyTavern 环境准备（若已经存在则立刻用）
   function ready(fn) {
     if (window.SillyTavern && SillyTavern.getContext) return fn();
     const i = setInterval(() => {
@@ -18,14 +14,13 @@ import { saveSettingsDebounced } from "../../../../script.js";
         fn();
       }
     }, 200);
-    // 超时后仍尝试执行
     setTimeout(fn, 5000);
   }
 
- // 在 ready(() => { 的开始处// 在 ready(() => { 的开始处
 ready(() => {
   try {
     const ctx = SillyTavern.getContext();
+    
     // 初始化 extensionSettings 存储
     if (!ctx.extensionSettings[MODULE_NAME]) {
       ctx.extensionSettings[MODULE_NAME] = {
@@ -56,7 +51,6 @@ ready(() => {
             ringUrl: ''
           }
         },
-        // wardrobe 正确结构
         wardrobe: {
           items: [],
           tags: {
@@ -67,13 +61,47 @@ ready(() => {
             outfit: []
           }
         },
-        // finance 正确结构 - 匹配 showFinance 的期望
         finance: {
           incomeTags: [],
           expenseTags: [],
           records: []
         },
-        apiConfig: {}
+        apiConfig: {},
+        // 睡眠定期清除配置
+        sleepAutoClean: {
+          days: 30,
+          cleanLocalStorage: false,
+          cleanWorldBook: false,
+          lastCleanDate: null
+        },
+        // 饮食定期清除配置
+        dietAutoClean: {
+          days: 30,
+          cleanLocalStorage: false,
+          cleanWorldBook: false,
+          lastCleanDate: null
+        },
+        // 运动定期清除配置
+        exerciseAutoClean: {
+          days: 30,
+          cleanLocalStorage: false,
+          cleanWorldBook: false,
+          lastCleanDate: null
+        },
+        // 心理健康定期清除配置
+        mentalAutoClean: {
+          days: 30,
+          cleanLocalStorage: false,
+          cleanWorldBook: false,
+          lastCleanDate: null
+        },
+        // ========== 备忘录定期清除配置 ==========
+        memoAutoClean: {
+          days: 30,
+          cleanLocalStorage: false,
+          cleanWorldBook: false,
+          lastCleanDate: null
+        }
       };
       if (ctx.saveSettingsDebounced) {
         ctx.saveSettingsDebounced();
@@ -96,7 +124,7 @@ ready(() => {
         };
       }
       
-      // 修复 finance - 检查旧格式并转换
+      // 修复 finance
       if (!settings.finance) {
         settings.finance = {
           incomeTags: [],
@@ -104,7 +132,6 @@ ready(() => {
           records: []
         };
       } else if (settings.finance.income !== undefined || settings.finance.expense !== undefined) {
-        // 从旧格式迁移到新格式
         const oldFinance = settings.finance;
         settings.finance = {
           incomeTags: oldFinance.income || [],
@@ -112,13 +139,12 @@ ready(() => {
           records: oldFinance.records || []
         };
       } else {
-        // 确保所有必需的属性存在
         settings.finance.incomeTags = settings.finance.incomeTags || [];
         settings.finance.expenseTags = settings.finance.expenseTags || [];
         settings.finance.records = settings.finance.records || [];
       }
       
-      // 修复 pomodoro - 检查旧格式并转换
+      // 修复 pomodoro
       if (!settings.pomodoro || Array.isArray(settings.pomodoro)) {
         const oldRecords = Array.isArray(settings.pomodoro) ? settings.pomodoro : [];
         settings.pomodoro = {
@@ -137,7 +163,6 @@ ready(() => {
           }
         };
       } else {
-        // 确保所有必需的属性存在
         settings.pomodoro.timeBlocks = settings.pomodoro.timeBlocks || [];
         settings.pomodoro.tagBlocks = settings.pomodoro.tagBlocks || [];
         settings.pomodoro.records = settings.pomodoro.records || [];
@@ -164,7 +189,57 @@ ready(() => {
       settings.bgmTags = settings.bgmTags || [];
       settings.social = settings.social || {};
       
-      // 迁移旧格式的心理健康数据到新格式(带enabled字段)
+      // 初始化睡眠定期清除配置
+      if (!settings.sleepAutoClean) {
+        settings.sleepAutoClean = {
+          days: 30,
+          cleanLocalStorage: false,
+          cleanWorldBook: false,
+          lastCleanDate: null
+        };
+      }
+      
+      // 初始化饮食定期清除配置
+      if (!settings.dietAutoClean) {
+        settings.dietAutoClean = {
+          days: 30,
+          cleanLocalStorage: false,
+          cleanWorldBook: false,
+          lastCleanDate: null
+        };
+      }
+      
+      // 初始化运动定期清除配置
+      if (!settings.exerciseAutoClean) {
+        settings.exerciseAutoClean = {
+          days: 30,
+          cleanLocalStorage: false,
+          cleanWorldBook: false,
+          lastCleanDate: null
+        };
+      }
+      
+      // 初始化心理健康定期清除配置
+      if (!settings.mentalAutoClean) {
+        settings.mentalAutoClean = {
+          days: 30,
+          cleanLocalStorage: false,
+          cleanWorldBook: false,
+          lastCleanDate: null
+        };
+      }
+      
+      // ========== 初始化备忘录定期清除配置 ==========
+      if (!settings.memoAutoClean) {
+        settings.memoAutoClean = {
+          days: 30,
+          cleanLocalStorage: false,
+          cleanWorldBook: false,
+          lastCleanDate: null
+        };
+      }
+      
+      // 迁移旧格式数据
       if (settings.mental && settings.mental.length > 0) {
         settings.mental = settings.mental.map(item => {
           if (typeof item === 'string') {
@@ -241,228 +316,841 @@ ready(() => {
         ctx.saveSettingsDebounced();
       }
     }
-    // 继续原有的DOM创建代码...
+    
+    // ========== 睡眠定期清除调度逻辑 ==========
+    function checkAndPerformSleepAutoClean() {
+      const config = ctx.extensionSettings[MODULE_NAME].sleepAutoClean;
+      if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+        return;
+      }
+      
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      const needsClean = !config.lastCleanDate || 
+                        (config.lastCleanDate !== today && currentHour >= 4);
+      
+      if (needsClean) {
+        console.log('[健康生活助手] 标记睡眠定期清除...');
+        ctx.extensionSettings[MODULE_NAME].sleepAutoClean._needsClean = true;
+        if (ctx.saveSettingsDebounced) {
+          ctx.saveSettingsDebounced();
+        }
+      }
+    }
+    
+    // ========== 饮食定期清除调度逻辑 ==========
+    function checkAndPerformDietAutoClean() {
+      const config = ctx.extensionSettings[MODULE_NAME].dietAutoClean;
+      if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+        return;
+      }
+      
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      const needsClean = !config.lastCleanDate || 
+                        (config.lastCleanDate !== today && currentHour >= 4);
+      
+      if (needsClean) {
+        console.log('[健康生活助手] 标记饮食定期清除...');
+        ctx.extensionSettings[MODULE_NAME].dietAutoClean._needsClean = true;
+        if (ctx.saveSettingsDebounced) {
+          ctx.saveSettingsDebounced();
+        }
+      }
+    }
+    
+    // ========== 运动定期清除调度逻辑 ==========
+    function checkAndPerformExerciseAutoClean() {
+      const config = ctx.extensionSettings[MODULE_NAME].exerciseAutoClean;
+      if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+        return;
+      }
+      
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      const needsClean = !config.lastCleanDate || 
+                        (config.lastCleanDate !== today && currentHour >= 4);
+      
+      if (needsClean) {
+        console.log('[健康生活助手] 标记运动定期清除...');
+        ctx.extensionSettings[MODULE_NAME].exerciseAutoClean._needsClean = true;
+        if (ctx.saveSettingsDebounced) {
+          ctx.saveSettingsDebounced();
+        }
+      }
+    }
+    
+    // ========== 心理健康定期清除调度逻辑 ==========
+    function checkAndPerformMentalAutoClean() {
+      const config = ctx.extensionSettings[MODULE_NAME].mentalAutoClean;
+      if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+        return;
+      }
+      
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      const needsClean = !config.lastCleanDate || 
+                        (config.lastCleanDate !== today && currentHour >= 4);
+      
+      if (needsClean) {
+        console.log('[健康生活助手] 标记心理健康定期清除...');
+        ctx.extensionSettings[MODULE_NAME].mentalAutoClean._needsClean = true;
+        if (ctx.saveSettingsDebounced) {
+          ctx.saveSettingsDebounced();
+        }
+      }
+    }
+    
+    // ========== 备忘录定期清除调度逻辑 ==========
+    function checkAndPerformMemoAutoClean() {
+      const config = ctx.extensionSettings[MODULE_NAME].memoAutoClean;
+      if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+        return;
+      }
+      
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      const needsClean = !config.lastCleanDate || 
+                        (config.lastCleanDate !== today && currentHour >= 4);
+      
+      if (needsClean) {
+        console.log('[健康生活助手] 标记备忘录定期清除...');
+        ctx.extensionSettings[MODULE_NAME].memoAutoClean._needsClean = true;
+        if (ctx.saveSettingsDebounced) {
+          ctx.saveSettingsDebounced();
+        }
+      }
+    }
+    
+    // 启动时检查
+    // ========== 启动时统一执行定期清除 ==========
+async function performAllAutoClean() {
+  console.log('[健康生活助手] 开始检查所有模块的定期清除任务');
+  
+  // 睡眠定期清除
+  const sleepConfig = ctx.extensionSettings[MODULE_NAME].sleepAutoClean;
+  if (sleepConfig && sleepConfig._needsClean) {
+    console.log('[健康生活助手] 执行睡眠定期清除');
+    delete sleepConfig._needsClean;
+    if (sleepConfig.cleanLocalStorage || sleepConfig.cleanWorldBook) {
+      await performSleepAutoClean(sleepConfig.days);
+      toastr.info(`已自动清除 ${sleepConfig.days} 天前的睡眠记录`, '定期清除');
+    }
+  }
+  
+  // 饮食定期清除
+  const dietConfig = ctx.extensionSettings[MODULE_NAME].dietAutoClean;
+  if (dietConfig && dietConfig._needsClean) {
+    console.log('[健康生活助手] 执行饮食定期清除');
+    delete dietConfig._needsClean;
+    if (dietConfig.cleanLocalStorage || dietConfig.cleanWorldBook) {
+      await performDietAutoClean(dietConfig.days);
+      toastr.info(`已自动清除 ${dietConfig.days} 天前的饮食记录`, '定期清除');
+    }
+  }
+  
+  // 运动定期清除
+  const exerciseConfig = ctx.extensionSettings[MODULE_NAME].exerciseAutoClean;
+  if (exerciseConfig && exerciseConfig._needsClean) {
+    console.log('[健康生活助手] 执行运动定期清除');
+    delete exerciseConfig._needsClean;
+    if (exerciseConfig.cleanLocalStorage || exerciseConfig.cleanWorldBook) {
+      await performExerciseAutoClean(exerciseConfig.days);
+      toastr.info(`已自动清除 ${exerciseConfig.days} 天前的运动记录`, '定期清除');
+    }
+  }
+  
+  // 心理健康定期清除
+  const mentalConfig = ctx.extensionSettings[MODULE_NAME].mentalAutoClean;
+  if (mentalConfig && mentalConfig._needsClean) {
+    console.log('[健康生活助手] 执行心理健康定期清除');
+    delete mentalConfig._needsClean;
+    if (mentalConfig.cleanLocalStorage || mentalConfig.cleanWorldBook) {
+      await performMentalAutoClean(mentalConfig.days);
+      toastr.info(`已自动清除 ${mentalConfig.days} 天前的心理记录`, '定期清除');
+    }
+  }
+  
+  // 备忘录定期清除
+  const memoConfig = ctx.extensionSettings[MODULE_NAME].memoAutoClean;
+  if (memoConfig && memoConfig._needsClean) {
+    console.log('[健康生活助手] 执行备忘录定期清除');
+    delete memoConfig._needsClean;
+    if (memoConfig.cleanLocalStorage || memoConfig.cleanWorldBook) {
+      await performMemoAutoClean(memoConfig.days);
+      toastr.info(`已自动清除 ${memoConfig.days} 天前的备忘录`, '定期清除');
+    }
+  }
+  
+  // 保存设置
+  if (ctx.saveSettingsDebounced) {
+    ctx.saveSettingsDebounced();
+  }
+  
+  console.log('[健康生活助手] 定期清除检查完成');
+}
+// ========== 睡眠定期清除函数 ==========
+async function performSleepAutoClean(daysToKeep) {
+  const config = ctx.extensionSettings[MODULE_NAME].sleepAutoClean;
+  if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+    return;
+  }
+  
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+  
+  function parseISODate(isoString) {
+    const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+  }
+  
+  const records = ctx.extensionSettings[MODULE_NAME].sleep || [];
+  
+  if (config.cleanLocalStorage) {
+    const filteredRecords = records.filter(rec => {
+      const recDate = parseISODate(rec.ts);
+      return recDate && recDate >= cutoffDate;
+    });
+    
+    const removedCount = records.length - filteredRecords.length;
+    if (removedCount > 0) {
+      ctx.extensionSettings[MODULE_NAME].sleep = filteredRecords;
+      saveSettings();
+      console.log(`[健康生活助手] 自动清除: 从 localStorage 删除了 ${removedCount} 条睡眠记录`);
+    }
+  }
+  
+  if (config.cleanWorldBook) {
+    try {
+      const moduleWI = await import('/scripts/world-info.js');
+      const selected = moduleWI.selected_world_info || [];
+      let fileId = null;
+      for (const WI of selected) {
+        if (WI.includes('健康生活助手')) {
+          fileId = WI;
+          break;
+        }
+      }
+      
+      if (fileId) {
+        const worldInfo = await moduleWI.loadWorldInfo(fileId);
+        const entries = worldInfo.entries || {};
+        
+        let targetUID = null;
+        for (const id in entries) {
+          const entry = entries[id];
+          const comment = entry.comment || '';
+          if (!entry.disable && (comment.includes('睡眠') || entry.title === '睡眠')) {
+            targetUID = entry.uid;
+            break;
+          }
+        }
+        
+        if (targetUID) {
+          const currentRecords = ctx.extensionSettings[MODULE_NAME].sleep || [];
+          const enabledRecords = currentRecords.filter(rec => rec.enabled !== false);
+          
+          const newContent = enabledRecords.map(rec => {
+            const typeText = rec.type === 'wake' ? '起床' : '入睡';
+            return `${typeText} 打卡 @ ${rec.ts}`;
+          }).join('\n');
+          
+          await globalThis.SillyTavern.getContext()
+            .SlashCommandParser.commands['setentryfield']
+            .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+          
+          console.log('[健康生活助手] 自动清除: 已同步睡眠世界书');
+        }
+      }
+    } catch (e) {
+      console.error('[健康生活助手] 自动清除睡眠世界书失败:', e);
+    }
+  }
+  
+  config.lastCleanDate = new Date().toISOString().split('T')[0];
+  saveSettings();
+}
+// ========== 饮食定期清除函数 ==========
+async function performDietAutoClean(daysToKeep) {
+  const config = ctx.extensionSettings[MODULE_NAME].dietAutoClean;
+  if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+    return;
+  }
+  
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+  
+  function parseISODate(isoString) {
+    const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+  }
+  
+  const records = ctx.extensionSettings[MODULE_NAME].diet || [];
+  
+  if (config.cleanLocalStorage) {
+    const filteredRecords = records.filter(rec => {
+      const recDate = parseISODate(rec.ts);
+      return recDate && recDate >= cutoffDate;
+    });
+    
+    const removedCount = records.length - filteredRecords.length;
+    if (removedCount > 0) {
+      ctx.extensionSettings[MODULE_NAME].diet = filteredRecords;
+      saveSettings();
+      console.log(`[健康生活助手] 自动清除: 从 localStorage 删除了 ${removedCount} 条饮食记录`);
+    }
+  }
+  
+  if (config.cleanWorldBook) {
+    try {
+      const moduleWI = await import('/scripts/world-info.js');
+      const selected = moduleWI.selected_world_info || [];
+      let fileId = null;
+      for (const WI of selected) {
+        if (WI.includes('健康生活助手')) {
+          fileId = WI;
+          break;
+        }
+      }
+      
+      if (fileId) {
+        const worldInfo = await moduleWI.loadWorldInfo(fileId);
+        const entries = worldInfo.entries || {};
+        
+        let targetUID = null;
+        for (const id in entries) {
+          const entry = entries[id];
+          const comment = entry.comment || '';
+          if (!entry.disable && (comment.includes('饮食') || entry.title === '饮食')) {
+            targetUID = entry.uid;
+            break;
+          }
+        }
+        
+        if (targetUID) {
+          const currentRecords = ctx.extensionSettings[MODULE_NAME].diet || [];
+          const enabledRecords = currentRecords.filter(rec => rec.enabled !== false);
+          
+          const newContent = enabledRecords.map(rec => {
+            return `${rec.ts}:${rec.meal}:${rec.text}`;
+          }).join('\n');
+          
+          await globalThis.SillyTavern.getContext()
+            .SlashCommandParser.commands['setentryfield']
+            .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+          
+          console.log('[健康生活助手] 自动清除: 已同步饮食世界书');
+        }
+      }
+    } catch (e) {
+      console.error('[健康生活助手] 自动清除饮食世界书失败:', e);
+    }
+  }
+  
+  config.lastCleanDate = new Date().toISOString().split('T')[0];
+  saveSettings();
+}
+// ========== 运动定期清除函数 ==========
+async function performExerciseAutoClean(daysToKeep) {
+  const config = ctx.extensionSettings[MODULE_NAME].exerciseAutoClean;
+  if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+    return;
+  }
+  
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+  
+  function parseISODate(isoString) {
+    const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+  }
+  
+  const records = ctx.extensionSettings[MODULE_NAME].exercise || [];
+  
+  if (config.cleanLocalStorage) {
+    const filteredRecords = records.filter(rec => {
+      const recDate = parseISODate(rec.ts);
+      return recDate && recDate >= cutoffDate;
+    });
+    
+    const removedCount = records.length - filteredRecords.length;
+    if (removedCount > 0) {
+      ctx.extensionSettings[MODULE_NAME].exercise = filteredRecords;
+      saveSettings();
+      console.log(`[健康生活助手] 自动清除: 从 localStorage 删除了 ${removedCount} 条运动记录`);
+    }
+  }
+  
+  if (config.cleanWorldBook) {
+    try {
+      const moduleWI = await import('/scripts/world-info.js');
+      const selected = moduleWI.selected_world_info || [];
+      let fileId = null;
+      for (const WI of selected) {
+        if (WI.includes('健康生活助手')) {
+          fileId = WI;
+          break;
+        }
+      }
+      
+      if (fileId) {
+        const worldInfo = await moduleWI.loadWorldInfo(fileId);
+        const entries = worldInfo.entries || {};
+        
+        let targetUID = null;
+        for (const id in entries) {
+          const entry = entries[id];
+          const comment = entry.comment || '';
+          if (!entry.disable && (comment.includes('运动') || entry.title === '运动')) {
+            targetUID = entry.uid;
+            break;
+          }
+        }
+        
+        if (targetUID) {
+          const currentRecords = ctx.extensionSettings[MODULE_NAME].exercise || [];
+          const enabledRecords = currentRecords.filter(rec => rec.enabled !== false);
+          
+          function toLocalISOString(isoString) {
+            try {
+              const date = new Date(isoString);
+              const offset = date.getTimezoneOffset();
+              const localDate = new Date(date.getTime() - offset * 60000);
+              return localDate.toISOString().slice(0, -1) + getTimezoneString();
+            } catch (e) {
+              return isoString;
+            }
+          }
+          
+          function getTimezoneString() {
+            const offset = -new Date().getTimezoneOffset();
+            const hours = Math.floor(Math.abs(offset) / 60);
+            const minutes = Math.abs(offset) % 60;
+            const sign = offset >= 0 ? '+' : '-';
+            return `${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+          }
+          
+          const newContent = enabledRecords.map(rec => {
+            const localISOTime = toLocalISOString(rec.ts);
+            return `运动记录 @ ${localISOTime}：${rec.text}`;
+          }).join('\n');
+          
+          await globalThis.SillyTavern.getContext()
+            .SlashCommandParser.commands['setentryfield']
+            .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+          
+          console.log('[健康生活助手] 自动清除: 已同步运动世界书');
+        }
+      }
+    } catch (e) {
+      console.error('[健康生活助手] 自动清除运动世界书失败:', e);
+    }
+  }
+  
+  config.lastCleanDate = new Date().toISOString().split('T')[0];
+  saveSettings();
+}
+// ========== 心理健康定期清除函数 ==========
+async function performMentalAutoClean(daysToKeep) {
+  const config = ctx.extensionSettings[MODULE_NAME].mentalAutoClean;
+  if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+    return;
+  }
+  
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+  
+  function parseISODate(isoString) {
+    const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+  }
+  
+  const storageKeys = ['mental', 'meditation', 'thoughtChains', 'confessions'];
+  const keywords = ['心理', '冥想', '思维链', '忏悔'];
+  
+  for (let i = 0; i < storageKeys.length; i++) {
+    const storageKey = storageKeys[i];
+    const keyword = keywords[i];
+    const records = ctx.extensionSettings[MODULE_NAME][storageKey] || [];
+    
+    if (config.cleanLocalStorage) {
+      const filteredRecords = records.filter(rec => {
+        const recDate = parseISODate(rec.ts);
+        return recDate && recDate >= cutoffDate;
+      });
+      
+      const removedCount = records.length - filteredRecords.length;
+      if (removedCount > 0) {
+        ctx.extensionSettings[MODULE_NAME][storageKey] = filteredRecords;
+        console.log(`[健康生活助手] 自动清除: 从 localStorage/${storageKey} 删除了 ${removedCount} 条记录`);
+      }
+    }
+    
+    if (config.cleanWorldBook) {
+      try {
+        const moduleWI = await import('/scripts/world-info.js');
+        const selected = moduleWI.selected_world_info || [];
+        let fileId = null;
+        for (const WI of selected) {
+          if (WI.includes('健康生活助手')) {
+            fileId = WI;
+            break;
+          }
+        }
+        
+        if (fileId) {
+          const worldInfo = await moduleWI.loadWorldInfo(fileId);
+          const entries = worldInfo.entries || {};
+          
+          let targetUID = null;
+          for (const id in entries) {
+            const entry = entries[id];
+            const comment = entry.comment || '';
+            if (!entry.disable && (comment.includes(keyword) || entry.title === keyword)) {
+              targetUID = entry.uid;
+              break;
+            }
+          }
+          
+          if (targetUID) {
+            const currentRecords = ctx.extensionSettings[MODULE_NAME][storageKey] || [];
+            const enabledRecords = currentRecords.filter(rec => rec.enabled !== false);
+            
+            const newContent = enabledRecords.map(rec => {
+              return `${rec.ts}:${rec.text}`;
+            }).join('\n');
+            
+            await globalThis.SillyTavern.getContext()
+              .SlashCommandParser.commands['setentryfield']
+              .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+            
+            console.log(`[健康生活助手] 自动清除: 已同步世界书/${keyword}`);
+          }
+        }
+      } catch (e) {
+        console.error(`[健康生活助手] 自动清除世界书/${keyword}失败:`, e);
+      }
+    }
+  }
+  
+  config.lastCleanDate = new Date().toISOString().split('T')[0];
+  saveSettings();
+}
+// ========== 备忘录定期清除函数 ==========
+async function performMemoAutoClean(daysToKeep) {
+  const config = ctx.extensionSettings[MODULE_NAME].memoAutoClean;
+  if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+    return;
+  }
+  
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+  
+  function parseISODate(isoString) {
+    const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+  }
+  
+  const memos = ctx.extensionSettings[MODULE_NAME].memo || [];
+  
+  if (config.cleanLocalStorage) {
+    const filteredMemos = memos.filter(m => {
+      const memoDate = parseISODate(m.date);
+      return memoDate && memoDate >= cutoffDate;
+    });
+    
+    const removedCount = memos.length - filteredMemos.length;
+    if (removedCount > 0) {
+      ctx.extensionSettings[MODULE_NAME].memo = filteredMemos;
+      saveSettings();
+      console.log(`[健康生活助手] 自动清除: 从 localStorage 删除了 ${removedCount} 条备忘录`);
+    }
+  }
+  
+  if (config.cleanWorldBook) {
+    try {
+      const moduleWI = await import('/scripts/world-info.js');
+      const selected = moduleWI.selected_world_info || [];
+      let fileId = null;
+      for (const WI of selected) {
+        if (WI.includes('健康生活助手')) {
+          fileId = WI;
+          break;
+        }
+      }
+      
+      if (fileId) {
+        const worldInfo = await moduleWI.loadWorldInfo(fileId);
+        const entries = worldInfo.entries || {};
+        
+        let targetUID = null;
+        for (const id in entries) {
+          const entry = entries[id];
+          const comment = entry.comment || '';
+          if (!entry.disable && (comment.includes('memo') || entry.title === 'memo')) {
+            targetUID = entry.uid;
+            break;
+          }
+        }
+        
+        if (targetUID) {
+          const currentMemos = ctx.extensionSettings[MODULE_NAME].memo || [];
+          const shared = currentMemos.filter(m => m.shared);
+          const arr = shared.map((m, i) => `${i+1}. ${m.date} ${m.text}`);
+          const newContent = arr.join('\n');
+          
+          await globalThis.SillyTavern.getContext()
+            .SlashCommandParser.commands['setentryfield']
+            .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+          
+          console.log('[健康生活助手] 自动清除: 已同步备忘录世界书');
+        }
+      }
+    } catch (e) {
+      console.error('[健康生活助手] 自动清除备忘录世界书失败:', e);
+    }
+  }
+  
+  config.lastCleanDate = new Date().toISOString().split('T')[0];
+  saveSettings();
+}
+
+    
     // 创建 DOM
     if (document.getElementById('health-assistant-fab')) return;
 
-      const fab = document.createElement('div');
-fab.id = 'health-assistant-fab';
-fab.title = '健康生活助手';
-fab.innerText = '🍀';
-document.body.appendChild(fab);
+    const fab = document.createElement('div');
+    fab.id = 'health-assistant-fab';
+    fab.title = '健康生活助手';
+    fab.innerText = '🍀';
+    document.body.appendChild(fab);
 
+    // 拖动逻辑（适配手机端）
+    function enableDrag(element) {
+      let isDragging = false;
+      let currentX;
+      let currentY;
+      let initialX;
+      let initialY;
+      let xOffset = 0;
+      let yOffset = 0;
 
-
-// 拖动逻辑（适配手机端）
-function enableDrag(element) {
-  let isDragging = false;
-  let currentX;
-  let currentY;
-  let initialX;
-  let initialY;
-  let xOffset = 0;
-  let yOffset = 0;
-
-  // 恢复保存的位置
-  const savedPosition = localStorage.getItem('health-assistant-fab-position');
-  if (savedPosition) {
-    const { x, y } = JSON.parse(savedPosition);
-    element.style.left = `${x}px`;
-    element.style.top = `${y}px`;
-    element.style.right = 'auto';
-    element.style.bottom = 'auto';
-  }
-
-  function dragStart(e) {
-    if (e.type === "touchstart") {
-      initialX = e.touches[0].clientX - xOffset;
-      initialY = e.touches[0].clientY - yOffset;
-    } else {
-      initialX = e.clientX - xOffset;
-      initialY = e.clientY - yOffset;
-    }
-
-    if (e.target === element) {
-      isDragging = true;
-      element.style.cursor = 'grabbing';
-    }
-  }
-
-  function dragEnd(e) {
-    if (!isDragging) return;
-    
-    initialX = currentX;
-    initialY = currentY;
-    isDragging = false;
-    element.style.cursor = 'grab';
-
-    // 保存位置
-    const rect = element.getBoundingClientRect();
-    localStorage.setItem('health-assistant-fab-position', JSON.stringify({
-      x: rect.left,
-      y: rect.top
-    }));
-  }
-
-  function drag(e) {
-    if (!isDragging) return;
-
-    e.preventDefault();
-
-    if (e.type === "touchmove") {
-      currentX = e.touches[0].clientX - initialX;
-      currentY = e.touches[0].clientY - initialY;
-    } else {
-      currentX = e.clientX - initialX;
-      currentY = e.clientY - initialY;
-    }
-
-    xOffset = currentX;
-    yOffset = currentY;
-
-    // 计算新位置
-    let newLeft = currentX;
-    let newTop = currentY;
-
-    // 获取窗口尺寸和元素尺寸
-    const windowWidth = window.innerWidth;
-    const windowHeight = window.innerHeight;
-    const elementWidth = element.offsetWidth;
-    const elementHeight = element.offsetHeight;
-
-    // 限制在窗口内
-    newLeft = Math.max(0, Math.min(newLeft, windowWidth - elementWidth));
-    newTop = Math.max(0, Math.min(newTop, windowHeight - elementHeight));
-
-    // 设置位置
-    element.style.left = `${newLeft}px`;
-    element.style.top = `${newTop}px`;
-    element.style.right = 'auto';
-    element.style.bottom = 'auto';
-    element.style.transform = "translate(0, 0)";
-  }
-
-  // 鼠标事件
-  element.addEventListener('mousedown', dragStart);
-  document.addEventListener('mousemove', drag);
-  document.addEventListener('mouseup', dragEnd);
-
-  // 触摸事件
-  element.addEventListener('touchstart', dragStart, { passive: false });
-  document.addEventListener('touchmove', drag, { passive: false });
-  document.addEventListener('touchend', dragEnd);
-
-  // 防止点击时触发拖动
-  element.addEventListener('click', (e) => {
-    if (xOffset !== 0 || yOffset !== 0) {
-      e.stopPropagation();
-      xOffset = 0;
-      yOffset = 0;
-    }
-  });
-
-  // 窗口大小改变时，确保按钮在可视区域内
-  window.addEventListener('resize', () => {
-    const rect = element.getBoundingClientRect();
-    const windowWidth = window.innerWidth;
-    const windowHeight = window.innerHeight;
-    
-    let newLeft = rect.left;
-    let newTop = rect.top;
-    
-    // 调整位置确保在窗口内
-    newLeft = Math.max(0, Math.min(newLeft, windowWidth - element.offsetWidth));
-    newTop = Math.max(0, Math.min(newTop, windowHeight - element.offsetHeight));
-    
-    element.style.left = `${newLeft}px`;
-    element.style.top = `${newTop}px`;
-  });
-}
-
-// 启用拖动
-enableDrag(fab);
-
-      const panel = document.createElement('div');
-      panel.id = 'health-assistant-panel';
-      panel.innerHTML = `
-        <div class="ha-header">
-          <div>
-            <div style="font-weight:600">健康生活助手</div>
-            <div id="ha-datetime" style="font-size:12px;color:#666"></div>
-          </div>
-          <div style="font-size:12px; color:#999; align-self:center">v0.1</div>
-        </div>
-
-        <div class="ha-grid">
-          <div class="ha-btn" data-key="routine">规律作息</div>
-          <div class="ha-btn" data-key="diet">健康饮食</div>
-          <div class="ha-btn" data-key="mental">心理健康</div>
-          <div class="ha-btn" data-key="exercise">适度运动</div>
-          <div class="ha-btn" data-key="wardrobe">用户衣柜</div>
-          <div class="ha-btn" data-key="finance">收支平衡</div>
-          <div class="ha-btn" data-key="wishes">心愿清单</div>
-          <div class="ha-btn" data-key="social">习惯养成</div>
-          <div class="ha-btn" data-key="todo">待办事项</div>
-          <div class="ha-btn" data-key="pomodoro">专注番茄</div>
-          <div class="ha-btn" data-key="memo">随笔备忘</div>
-          <div class="ha-btn" data-key="bgm">背景音乐</div>
-          <div class="ha-btn" data-key="apiconf">独立API</div>
-          <div class="ha-btn" data-key="clearbook">清除数据</div>
-        </div>
-
-        <div id="ha-content-area" class="ha-subpanel" style="display:block;">
-          <div class="ha-small">请选择一个功能</div>
-        </div>
-      `;
-      document.body.appendChild(panel);
-
-      // 更新时钟
-      const dtEl = panel.querySelector('#ha-datetime');
-      function updateClock(){
-        const d = new Date();
-        dtEl.innerText = d.toLocaleString();
+      // 恢复保存的位置
+      const savedPosition = localStorage.getItem('health-assistant-fab-position');
+      if (savedPosition) {
+        const { x, y } = JSON.parse(savedPosition);
+        element.style.left = `${x}px`;
+        element.style.top = `${y}px`;
+        element.style.right = 'auto';
+        element.style.bottom = 'auto';
       }
-      updateClock();
-      setInterval(updateClock, 1000);
 
-      // 面板切换
-      fab.addEventListener('click', () => {
-        panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+      function dragStart(e) {
+        if (e.type === "touchstart") {
+          initialX = e.touches[0].clientX - xOffset;
+          initialY = e.touches[0].clientY - yOffset;
+        } else {
+          initialX = e.clientX - xOffset;
+          initialY = e.clientY - yOffset;
+        }
+
+        if (e.target === element) {
+          isDragging = true;
+          element.style.cursor = 'grabbing';
+        }
+      }
+
+      function dragEnd(e) {
+        if (!isDragging) return;
+        
+        initialX = currentX;
+        initialY = currentY;
+        isDragging = false;
+        element.style.cursor = 'grab';
+
+        // 保存位置
+        const rect = element.getBoundingClientRect();
+        localStorage.setItem('health-assistant-fab-position', JSON.stringify({
+          x: rect.left,
+          y: rect.top
+        }));
+      }
+
+      function drag(e) {
+        if (!isDragging) return;
+
+        e.preventDefault();
+
+        if (e.type === "touchmove") {
+          currentX = e.touches[0].clientX - initialX;
+          currentY = e.touches[0].clientY - initialY;
+        } else {
+          currentX = e.clientX - initialX;
+          currentY = e.clientY - initialY;
+        }
+
+        xOffset = currentX;
+        yOffset = currentY;
+
+        // 计算新位置
+        let newLeft = currentX;
+        let newTop = currentY;
+
+        // 获取窗口尺寸和元素尺寸
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const elementWidth = element.offsetWidth;
+        const elementHeight = element.offsetHeight;
+
+        // 限制在窗口内
+        newLeft = Math.max(0, Math.min(newLeft, windowWidth - elementWidth));
+        newTop = Math.max(0, Math.min(newTop, windowHeight - elementHeight));
+
+        // 设置位置
+        element.style.left = `${newLeft}px`;
+        element.style.top = `${newTop}px`;
+        element.style.right = 'auto';
+        element.style.bottom = 'auto';
+        element.style.transform = "translate(0, 0)";
+      }
+
+      // 鼠标事件
+      element.addEventListener('mousedown', dragStart);
+      document.addEventListener('mousemove', drag);
+      document.addEventListener('mouseup', dragEnd);
+
+      // 触摸事件
+      element.addEventListener('touchstart', dragStart, { passive: false });
+      document.addEventListener('touchmove', drag, { passive: false });
+      document.addEventListener('touchend', dragEnd);
+
+      // 防止点击时触发拖动
+      element.addEventListener('click', (e) => {
+        if (xOffset !== 0 || yOffset !== 0) {
+          e.stopPropagation();
+          xOffset = 0;
+          yOffset = 0;
+        }
       });
 
-      // 简单的 helper：保存 settings
-      function saveSettings() {
-        if (ctx.saveSettingsDebounced) ctx.saveSettingsDebounced();
-        else console.warn('saveSettingsDebounced not available - changes may not persist until reload');
-      }
-
-      // 调试日志（轻量）
-      function debugLog(...args) {
-        // 打开 window.DEBUG_HEALTH_ASSISTANT 可查看日志
-        if (window.DEBUG_HEALTH_ASSISTANT) console.log('[健康生活助手]', ...args);
-      }
-
-      // 打开各主面板（最小实现）
-      const content = panel.querySelector('#ha-content-area');
-      panel.querySelectorAll('.ha-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const key = btn.dataset.key;
-          if (key === 'routine') showRoutine();
-          else if (key === 'diet') showDiet();
-          else if (key === 'mental') showMental();
-          else if (key === 'exercise') showExercise();
-          else if (key === 'finance') showFinance();
-          else if (key === 'wardrobe') showWardrobe(); 
-          else if (key === 'wishes') showWishes();
-          else if (key === 'social') showSocial();
-          else if (key === 'todo') showTodo();
-          else if (key === 'pomodoro') showPomodoro();
-          else if (key === 'memo') showMemo();
-          else if (key === 'bgm') showBgm();
-          else if (key === 'clearbook') showClearBook();
-          else if (key === 'apiconf') showApiConfig();
-        });
+      // 窗口大小改变时，确保按钮在可视区域内
+      window.addEventListener('resize', () => {
+        const rect = element.getBoundingClientRect();
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        
+        let newLeft = rect.left;
+        let newTop = rect.top;
+        
+        // 调整位置确保在窗口内
+        newLeft = Math.max(0, Math.min(newLeft, windowWidth - element.offsetWidth));
+        newTop = Math.max(0, Math.min(newTop, windowHeight - element.offsetHeight));
+        
+        element.style.left = `${newLeft}px`;
+        element.style.top = `${newTop}px`;
       });
+    }
+
+    // 启用拖动
+    enableDrag(fab);
+
+    const panel = document.createElement('div');
+    panel.id = 'health-assistant-panel';
+    panel.innerHTML = `
+      <div class="ha-header">
+        <div>
+          <div style="font-weight:600">健康生活助手</div>
+          <div id="ha-datetime" style="font-size:12px;color:#666"></div>
+        </div>
+        <div style="font-size:12px; color:#999; align-self:center">v0.1</div>
+      </div>
+
+      <div class="ha-grid">
+        <div class="ha-btn" data-key="routine">规律作息</div>
+        <div class="ha-btn" data-key="diet">健康饮食</div>
+        <div class="ha-btn" data-key="mental">心理健康</div>
+        <div class="ha-btn" data-key="exercise">适度运动</div>
+        <div class="ha-btn" data-key="wardrobe">用户衣柜</div>
+        <div class="ha-btn" data-key="finance">收支平衡</div>
+        <div class="ha-btn" data-key="wishes">心愿清单</div>
+        <div class="ha-btn" data-key="social">习惯养成</div>
+        <div class="ha-btn" data-key="todo">待办事项</div>
+        <div class="ha-btn" data-key="pomodoro">专注番茄</div>
+        <div class="ha-btn" data-key="memo">随笔备忘</div>
+        <div class="ha-btn" data-key="bgm">背景音乐</div>
+        <div class="ha-btn" data-key="apiconf">独立API</div>
+        <div class="ha-btn" data-key="clearbook">清除数据</div>
+      </div>
+
+      <div id="ha-content-area" class="ha-subpanel" style="display:block;">
+        <div class="ha-small">请选择一个功能</div>
+      </div>
+    `;
+    document.body.appendChild(panel);
+
+    // 更新时钟
+    const dtEl = panel.querySelector('#ha-datetime');
+    function updateClock(){
+      const d = new Date();
+      dtEl.innerText = d.toLocaleString();
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // 面板切换
+    fab.addEventListener('click', () => {
+      panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+    });
+
+    // 简单的 helper：保存 settings
+    function saveSettings() {
+      if (ctx.saveSettingsDebounced) ctx.saveSettingsDebounced();
+      else console.warn('saveSettingsDebounced not available - changes may not persist until reload');
+    }
+
+    // 调试日志
+    function debugLog(...args) {
+      if (window.DEBUG_HEALTH_ASSISTANT) console.log('[健康生活助手]', ...args);
+    }
+
+    // 打开各主面板
+    const content = panel.querySelector('#ha-content-area');
+    panel.querySelectorAll('.ha-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.key;
+        if (key === 'routine') showRoutine();
+        else if (key === 'diet') showDiet();
+        else if (key === 'mental') showMental();
+        else if (key === 'exercise') showExercise();
+        else if (key === 'finance') showFinance();
+        else if (key === 'wardrobe') showWardrobe(); 
+        else if (key === 'wishes') showWishes();
+        else if (key === 'social') showSocial();
+        else if (key === 'todo') showTodo();
+        else if (key === 'pomodoro') showPomodoro();
+        else if (key === 'memo') showMemo();
+        else if (key === 'bgm') showBgm();
+        else if (key === 'clearbook') showClearBook();
+        else if (key === 'apiconf') showApiConfig();
+      });
+    });
+
+ 
 
       // --------- 各模块内容（最小实现） ----------
 async function showWardrobe() {
@@ -2114,9 +2802,21 @@ async function showPomodoro() {
       
       
       
-   async function showRoutine(){  
+      
+      
+      
+      
+      
+      
+      
+      
+async function showRoutine(){  
   const container = content;  
   container.style.display = 'block';  
+  
+ 
+    
+  
   container.innerHTML = `  
     <div style="font-weight:600;margin-bottom:6px">规律作息</div>  
     <div style="display:flex;gap:8px;margin-bottom:6px">  
@@ -2130,20 +2830,14 @@ async function showPomodoro() {
     <div style="display:flex;gap:8px;margin-bottom:6px">  
       <button id="ha-sleep-help" class="ha-btn" style="flex:1">助眠</button>  
       <button id="ha-sleep-analysis" class="ha-btn" style="flex:1">睡眠质量分析</button>  
-    </div>  
-    <div id="ha-subpanel" 
-     style="
-       margin-top:6px;
-       padding:6px;
-       border:1px solid #ddd;
-       background:#f9f9f9;
-       white-space:pre-wrap;
-       min-height:60px;
-       max-height:200px;
-       overflow:auto;
-       display:block;
-     ">
     </div>
+    <div style="display:flex;gap:8px;margin-bottom:6px">  
+      <button id="ha-sleep-records" class="ha-btn" style="flex:1">睡眠记录管理</button>  
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:6px">  
+      <button id="ha-sleep-auto-clean" class="ha-btn" style="flex:1">定期清除</button>  
+    </div>  
+    <div id="ha-subpanel" class="ha-routine-subpanel"></div>
     <div id="ha-routine-log" class="ha-small"></div>  
   `;  
   const wakeBtn = document.getElementById('ha-wake');  
@@ -2152,6 +2846,27 @@ async function showPomodoro() {
   const sleepManualBtn = document.getElementById('ha-sleep-manual');  
   const logEl = document.getElementById('ha-routine-log');  
   const subPanel = document.getElementById('ha-subpanel');
+  
+  // 生成带时区偏移的ISO格式时间字符串
+  function toLocalISOString(date) {
+    const tzOffset = -date.getTimezoneOffset();
+    const diff = tzOffset >= 0 ? '+' : '-';
+    const pad = (num) => String(Math.floor(Math.abs(num))).padStart(2, '0');
+    
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hour = String(date.getHours()).padStart(2, '0');
+    const minute = String(date.getMinutes()).padStart(2, '0');
+    const second = String(date.getSeconds()).padStart(2, '0');
+    const ms = String(date.getMilliseconds()).padStart(3, '0');
+    
+    const tzHour = pad(tzOffset / 60);
+    const tzMin = pad(tzOffset % 60);
+    
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}.${ms}${diff}${tzHour}:${tzMin}`;
+  }
+  
   async function findHealthWorldFile() {  
     try {  
       const moduleWI = await import('/scripts/world-info.js');  
@@ -2170,7 +2885,7 @@ async function showPomodoro() {
       return null;  
     }  
   }  
-  async function appendToWorldInfoSleepLog(type, label){  
+  async function appendToWorldInfoSleepLog(type, localIsoTime){  
     try {  
       const fileId = await findHealthWorldFile();  
       if (!fileId) { 
@@ -2193,7 +2908,8 @@ async function showPomodoro() {
         toastr.warning('未找到睡眠 entry（未创建），写入被跳过', '世界书');
         return;  
       }  
-      const recLine = `${type === 'wake' ? '起床' : '入睡'} 打卡 @ ${label}`;  
+      // 直接使用带时区的ISO时间
+      const recLine = `${type === 'wake' ? '起床' : '入睡'} 打卡 @ ${localIsoTime}`;  
       const existing = entries[targetUID].content || '';  
       const newContent = existing + (existing ? '\n' : '') + recLine;  
       await globalThis.SillyTavern.getContext()  
@@ -2206,43 +2922,39 @@ async function showPomodoro() {
   }  
   function appendSleepRecord(type, customTime = null){  
     const now = customTime || new Date();  
-    const rec = { type, ts: now.toISOString(), label: now.toLocaleString() };  
+    const localIsoTime = toLocalISOString(now);  // 带时区的ISO格式
+    const rec = { 
+      type, 
+      ts: localIsoTime,  // 本地时区ISO格式存储
+      label: localIsoTime,  // 本地时区ISO格式
+      enabled: true
+    };  
     ctx.extensionSettings[MODULE_NAME].sleep.push(rec);  
     saveSettings();  
-    const text = `${type === 'wake' ? '起床' : '入睡'} 打卡：\n${now.toLocaleString()}`;  
+    const text = `${type === 'wake' ? '起床' : '入睡'} 打卡：\n${localIsoTime}`;  
     toastr.success(text, '打卡成功');
     renderLog();  
-    appendToWorldInfoSleepLog(type, now.toLocaleString());  
+    appendToWorldInfoSleepLog(type, localIsoTime);  // 传入本地ISO格式时间
   }  
   // 手动选择时间的函数
   function openManualTimeDialog(type) {
     const typeText = type === 'wake' ? '起床' : '入睡';
     const dialog = document.createElement('div');
+    dialog.className = 'ha-manual-time-overlay';
     
     dialog.innerHTML = `
-      <div style="background:#fff;padding:8px;border-radius:6px;box-shadow:0 1px 6px rgba(0,0,0,0.12);max-width:320px;margin:auto;">
-        <div style="font-weight:600;margin-bottom:6px;">手动${typeText}打卡</div>
-        <label style="font-size:13px">日期:</label><br>
-        <input id="manual-sleep-date" type="date" style="width:100%;margin-bottom:6px;padding:4px;"><br>
-        <label style="font-size:13px">时间:</label><br>
-        <input id="manual-sleep-time" type="time" style="width:100%;margin-bottom:6px;padding:4px;"><br>
-        <div style="text-align:right;margin-top:8px;">
+      <div class="ha-manual-time-panel">
+        <div class="ha-manual-time-title">手动${typeText}打卡</div>
+        <label class="ha-manual-time-label">日期:</label><br>
+        <input id="manual-sleep-date" type="date" class="ha-manual-time-input"><br>
+        <label class="ha-manual-time-label">时间:</label><br>
+        <input id="manual-sleep-time" type="time" class="ha-manual-time-input"><br>
+        <div class="ha-manual-time-footer">
           <button id="manual-sleep-ok" class="ha-btn">确定</button>
           <button id="manual-sleep-cancel" class="ha-btn" style="margin-left:6px;">取消</button>
         </div>
       </div>
     `;
-    
-    Object.assign(dialog.style, {
-      position: 'absolute',
-      top: '8px',
-      left: '8px',
-      right: '8px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 99999
-    });
     
     container.appendChild(dialog);
     
@@ -2385,76 +3097,504 @@ async function showPomodoro() {
       toastr.error('分析异常: ' + (e.message || e), '错误');
     }  
   });
+  
+  // 睡眠记录管理按钮
+  document.getElementById('ha-sleep-records').addEventListener('click', () => {
+    openSleepRecordsManager();
+  });
+  
+  // 定期清除按钮
+  document.getElementById('ha-sleep-auto-clean').addEventListener('click', () => {
+    openAutoCleanPanel();
+  });
+  
+  // 睡眠记录管理面板
+  function openSleepRecordsManager() {
+    const panel = document.createElement('div');
+    panel.className = 'ha-sleep-records-overlay';
+    
+    panel.innerHTML = `
+      <div class="ha-sleep-records-panel">
+        <div class="ha-sleep-records-title">睡眠记录管理</div>
+        <div id="sleep-records-list" class="ha-sleep-records-list"></div>
+        <div class="ha-sleep-records-footer">
+          <button id="sleep-records-close" class="ha-btn">关闭</button>
+        </div>
+      </div>
+    `;
+    
+    container.appendChild(panel);
+    
+    // 渲染记录列表
+    renderRecordsList();
+    
+    function renderRecordsList() {
+      const listEl = panel.querySelector('#sleep-records-list');
+      const records = ctx.extensionSettings[MODULE_NAME].sleep || [];
+      
+      if (records.length === 0) {
+        listEl.innerHTML = '<div class="ha-sleep-records-empty">暂无睡眠记录</div>';
+        return;
+      }
+      
+      listEl.innerHTML = records.map((rec, index) => {
+        const typeText = rec.type === 'wake' ? '起床' : '入睡';
+        const enabledStatus = rec.enabled !== false; // 兼容旧数据，默认为启用
+        const statusText = enabledStatus ? '已启用' : '未启用';
+        const statusClass = enabledStatus ? 'enabled' : 'disabled';
+        
+        return `
+          <div class="ha-sleep-record-item">
+            <div class="ha-sleep-record-content">
+              <div class="ha-sleep-record-info">
+                <div class="ha-sleep-record-main">${typeText}</div>
+                <div class="ha-sleep-record-time">${rec.ts}</div>
+                <div class="ha-sleep-record-status ${statusClass}">${statusText}</div>
+              </div>
+              <div class="ha-sleep-record-actions">
+                <button class="ha-btn ha-sleep-record-btn toggle-record" data-index="${index}">
+                  ${enabledStatus ? '禁用' : '启用'}
+                </button>
+                <button class="ha-btn ha-sleep-record-btn delete" data-index="${index}">
+                  删除
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      // 绑定删除按钮事件
+      listEl.querySelectorAll('.delete').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const index = parseInt(btn.getAttribute('data-index'));
+          await deleteRecord(index);
+          renderRecordsList();
+        });
+      });
+      
+      // 绑定启用/禁用按钮事件
+      listEl.querySelectorAll('.toggle-record').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const index = parseInt(btn.getAttribute('data-index'));
+          await toggleRecord(index);
+          renderRecordsList();
+        });
+      });
+    }
+    
+    // 删除记录（同时从localStorage和世界书删除）
+    async function deleteRecord(index) {
+      const records = ctx.extensionSettings[MODULE_NAME].sleep || [];
+      const record = records[index];
+      
+      if (!record) {
+        toastr.warning('记录不存在', '删除失败');
+        return;
+      }
+      
+      // 从localStorage删除
+      records.splice(index, 1);
+      saveSettings();
+      
+      // 从世界书删除
+      await removeFromWorldInfo(record);
+      
+      toastr.success('记录已删除', '删除成功');
+      renderLog();
+    }
+    
+    // 切换启用状态
+    async function toggleRecord(index) {
+      const records = ctx.extensionSettings[MODULE_NAME].sleep || [];
+      const record = records[index];
+      
+      if (!record) {
+        toastr.warning('记录不存在', '操作失败');
+        return;
+      }
+      
+      // 切换启用状态
+      record.enabled = !(record.enabled !== false); // 兼容旧数据
+      saveSettings();
+      
+      // 同步到世界书
+      await syncToWorldInfo();
+      
+      const statusText = record.enabled ? '已启用' : '已禁用';
+      toastr.success(`记录${statusText}`, '操作成功');
+      renderLog();
+    }
+    
+    // 从世界书删除特定记录
+    async function removeFromWorldInfo(record) {
+      try {
+        const fileId = await findHealthWorldFile();
+        if (!fileId) return;
+        
+        const moduleWI = await import('/scripts/world-info.js');
+        const worldInfo = await moduleWI.loadWorldInfo(fileId);
+        const entries = worldInfo.entries || {};
+        
+        let targetUID = null;
+        for (const id in entries) {
+          const entry = entries[id];
+          const comment = entry.comment || '';
+          if (!entry.disable && (comment.includes('睡眠') || comment.includes('健康生活助手/睡眠') || entry.title === '睡眠')) {
+            targetUID = entry.uid;
+            break;
+          }
+        }
+        
+        if (!targetUID) return;
+        
+        // 重新生成世界书内容（排除被删除的记录）
+        await syncToWorldInfo();
+        
+      } catch (e) {
+        console.error('从世界书删除失败:', e);
+      }
+    }
+    
+    // 同步所有启用的记录到世界书
+    async function syncToWorldInfo() {
+      try {
+        const fileId = await findHealthWorldFile();
+        if (!fileId) return;
+        
+        const moduleWI = await import('/scripts/world-info.js');
+        const worldInfo = await moduleWI.loadWorldInfo(fileId);
+        const entries = worldInfo.entries || {};
+        
+        let targetUID = null;
+        for (const id in entries) {
+          const entry = entries[id];
+          const comment = entry.comment || '';
+          if (!entry.disable && (comment.includes('睡眠') || comment.includes('健康生活助手/睡眠') || entry.title === '睡眠')) {
+            targetUID = entry.uid;
+            break;
+          }
+        }
+        
+        if (!targetUID) {
+          toastr.warning('未找到睡眠条目', '同步失败');
+          return;
+        }
+        
+        // 只包含启用的记录
+        const records = ctx.extensionSettings[MODULE_NAME].sleep || [];
+        const enabledRecords = records.filter(rec => rec.enabled !== false);
+        
+        const newContent = enabledRecords.map(rec => {
+          const typeText = rec.type === 'wake' ? '起床' : '入睡';
+          // 直接使用存储的带时区的ISO时间
+          return `${typeText} 打卡 @ ${rec.ts}`;
+        }).join('\n');
+        
+        await globalThis.SillyTavern.getContext()
+          .SlashCommandParser.commands['setentryfield']
+          .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+        
+      } catch (e) {
+        console.error('同步到世界书失败:', e);
+      }
+    }
+    
+    panel.querySelector('#sleep-records-close').onclick = () => panel.remove();
+  }
+  
+  // 定期清除面板
+  function openAutoCleanPanel() {
+    const panel = document.createElement('div');
+    panel.className = 'ha-sleep-records-overlay';
+    
+    // 读取当前配置
+    const config = ctx.extensionSettings[MODULE_NAME].sleepAutoClean || {
+      days: 30,
+      cleanLocalStorage: false,
+      cleanWorldBook: false
+    };
+    
+    panel.innerHTML = `
+      <div class="ha-sleep-records-panel" style="max-width: 400px;">
+        <div class="ha-sleep-records-title">定期清除设置</div>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px;">清除天数（保留最近N天）:</label>
+          <input type="number" id="auto-clean-days" value="${config.days}" min="1" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+          <div style="font-size: 11px; color: #666; margin-top: 2px;">例如: 输入30表示保留最近30天的记录</div>
+        </div>
+        <div style="margin-bottom: 12px;">
+          <button id="auto-clean-localstorage" class="ha-btn" style="width: 100%; margin-bottom: 6px; ${config.cleanLocalStorage ? 'background: #f44336; color: #fff;' : ''}">
+            ${config.cleanLocalStorage ? '✓ ' : ''}清除 localStorage
+          </button>
+          <button id="auto-clean-worldbook" class="ha-btn" style="width: 100%; ${config.cleanWorldBook ? 'background: #f44336; color: #fff;' : ''}">
+            ${config.cleanWorldBook ? '✓ ' : ''}清除世界书
+          </button>
+        </div>
+        <div style="font-size: 12px; color: #666; padding: 8px; background: #f9f9f9; border-radius: 4px; margin-bottom: 12px;">
+          <strong>说明:</strong> 每天04:00自动清除过期记录。如果04:00时浏览器未打开，则在扩展下次启动时执行清除。
+        </div>
+        <div class="ha-sleep-records-footer">
+          <button id="auto-clean-save" class="ha-btn" style="background: #4CAF50; color: #fff;">保存设置</button>
+          <button id="auto-clean-close" class="ha-btn" style="margin-left: 6px;">关闭</button>
+        </div>
+      </div>
+    `;
+    
+    container.appendChild(panel);
+    
+    let cleanLocalStorage = config.cleanLocalStorage;
+    let cleanWorldBook = config.cleanWorldBook;
+    
+    // 切换 localStorage 清除
+    panel.querySelector('#auto-clean-localstorage').addEventListener('click', (e) => {
+      cleanLocalStorage = !cleanLocalStorage;
+      const btn = e.target;
+      if (cleanLocalStorage) {
+        btn.style.background = '#f44336';
+        btn.style.color = '#fff';
+        btn.textContent = '✓ 清除 localStorage';
+      } else {
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.textContent = '清除 localStorage';
+      }
+    });
+    
+    // 切换世界书清除
+    panel.querySelector('#auto-clean-worldbook').addEventListener('click', (e) => {
+      cleanWorldBook = !cleanWorldBook;
+      const btn = e.target;
+      if (cleanWorldBook) {
+        btn.style.background = '#f44336';
+        btn.style.color = '#fff';
+        btn.textContent = '✓ 清除世界书';
+      } else {
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.textContent = '清除世界书';
+      }
+    });
+    
+    // 保存设置
+    panel.querySelector('#auto-clean-save').addEventListener('click', () => {
+      const days = parseInt(panel.querySelector('#auto-clean-days').value);
+      if (isNaN(days) || days < 1) {
+        toastr.warning('请输入有效的天数（至少为1）', '输入错误');
+        return;
+      }
+      
+      ctx.extensionSettings[MODULE_NAME].sleepAutoClean = {
+        days,
+        cleanLocalStorage,
+        cleanWorldBook,
+        lastCleanDate: ctx.extensionSettings[MODULE_NAME].sleepAutoClean?.lastCleanDate || null
+      };
+      saveSettings();
+      toastr.success('定期清除设置已保存', '保存成功');
+      panel.remove();
+    });
+    
+    panel.querySelector('#auto-clean-close').onclick = () => panel.remove();
+  }
+  
+  // 执行定期清除（从指定日期之前的记录）
+  async function performAutoClean(daysToKeep) {
+    const config = ctx.extensionSettings[MODULE_NAME].sleepAutoClean;
+    if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+      return; // 未配置或都未启用
+    }
+    
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+    
+    // 解析ISO日期字符串获取日期部分
+    function parseISODate(isoString) {
+      const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!match) return null;
+      return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+    }
+    
+    const records = ctx.extensionSettings[MODULE_NAME].sleep || [];
+    
+    // 清除 localStorage
+    if (config.cleanLocalStorage) {
+      const filteredRecords = records.filter(rec => {
+        const recDate = parseISODate(rec.ts);
+        return recDate && recDate >= cutoffDate;
+      });
+      
+      const removedCount = records.length - filteredRecords.length;
+      if (removedCount > 0) {
+        ctx.extensionSettings[MODULE_NAME].sleep = filteredRecords;
+        saveSettings();
+        console.log(`[健康生活助手] 自动清除: 从 localStorage 删除了 ${removedCount} 条记录`);
+      }
+    }
+    
+    // 清除世界书
+    if (config.cleanWorldBook) {
+      try {
+        const fileId = await findHealthWorldFile();
+        if (!fileId) return;
+        
+        const moduleWI = await import('/scripts/world-info.js');
+        const worldInfo = await moduleWI.loadWorldInfo(fileId);
+        const entries = worldInfo.entries || {};
+        
+        let targetUID = null;
+        for (const id in entries) {
+          const entry = entries[id];
+          const comment = entry.comment || '';
+          if (!entry.disable && (comment.includes('睡眠') || comment.includes('健康生活助手/睡眠') || entry.title === '睡眠')) {
+            targetUID = entry.uid;
+            break;
+          }
+        }
+        
+        if (!targetUID) return;
+        
+        // 获取当前启用的记录（已经是过滤后的）
+        const currentRecords = ctx.extensionSettings[MODULE_NAME].sleep || [];
+        const enabledRecords = currentRecords.filter(rec => rec.enabled !== false);
+        
+        const newContent = enabledRecords.map(rec => {
+          const typeText = rec.type === 'wake' ? '起床' : '入睡';
+          return `${typeText} 打卡 @ ${rec.ts}`;
+        }).join('\n');
+        
+        await globalThis.SillyTavern.getContext()
+          .SlashCommandParser.commands['setentryfield']
+          .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+        
+        console.log('[健康生活助手] 自动清除: 已同步世界书');
+      } catch (e) {
+        console.error('[健康生活助手] 自动清除世界书失败:', e);
+      }
+    }
+    
+    // 更新最后清除日期
+    config.lastCleanDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    saveSettings();
+  }
+  
   function renderLog(){  
     const arr = ctx.extensionSettings[MODULE_NAME].sleep || [];  
     logEl.innerText = `已记录 ${arr.length} 条（存储在扩展设置与世界书中）`;  
   }  
-  renderLog();  
+  renderLog();
+  
+ 
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
   
-      async function showDiet() {
+async function showDiet() {
   content.style.display = 'block';
+  
+  
+    
+  
   content.innerHTML = `
-    <div style="font-weight:600;margin-bottom:6px">健康饮食</div>
-    <div style="display:flex;gap:8px;margin-bottom:6px">
-      <button id="ha-breakfast" class="ha-btn" style="flex:1">早餐</button>
-      <button id="ha-lunch" class="ha-btn" style="flex:1">午餐</button>
+    <div class="ha-diet-title">健康饮食</div>
+    <div class="ha-diet-btn-row">
+      <button id="ha-breakfast" class="ha-btn ha-diet-btn-flex">早餐</button>
+      <button id="ha-lunch" class="ha-btn ha-diet-btn-flex">午餐</button>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:6px">
-      <button id="ha-dinner" class="ha-btn" style="flex:1">晚餐</button>
-      <button id="ha-other" class="ha-btn" style="flex:1">其他记录</button>
+    <div class="ha-diet-btn-row">
+      <button id="ha-dinner" class="ha-btn ha-diet-btn-flex">晚餐</button>
+      <button id="ha-other" class="ha-btn ha-diet-btn-flex">其他记录</button>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:6px">
-      <button id="ha-diet-advice" class="ha-btn" style="flex:1">饮食建议（API）</button>
+    <div class="ha-diet-btn-row">
+      <button id="ha-diet-advice" class="ha-btn ha-diet-btn-flex">饮食建议（API）</button>
+      <button id="ha-diet-stats" class="ha-btn ha-diet-btn-flex">饮食记录管理</button>
     </div>
-    <div id="ha-diet-subpanel" 
-         style="margin-top:6px;padding:6px;border:1px solid #ddd;background:#f9f9f9;white-space:pre-wrap;min-height:60px;max-height:200px;overflow:auto;display:block;">
+    <div class="ha-diet-btn-row">
+      <button id="ha-diet-auto-clean" class="ha-btn ha-diet-btn-flex">定期清除</button>
     </div>
+    <div id="ha-diet-subpanel" class="ha-diet-subpanel"></div>
     <div id="ha-diet-log" class="ha-small"></div>
-    <div id="ha-diet-debug" style="margin-top:8px;padding:6px;border:1px solid #ddd;font-size:12px;max-height:160px;overflow:auto;background:#fafafa;white-space:pre-wrap"></div>
   `;
 
   const logEl = document.getElementById('ha-diet-log');
-  const debugEl = document.getElementById('ha-diet-debug');
   const subPanel = document.getElementById('ha-diet-subpanel');
-
-  function debugLog(...args) {
-    const ts = new Date().toLocaleTimeString();
-    const msg = `[${ts}] ` + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
-    debugEl.innerText += msg + "\n";
-    debugEl.scrollTop = debugEl.scrollHeight;
-    console.log('[健康生活助手]', ...args);
+  
+  // ========== 带时区偏移的 ISO 格式时间函数 ==========
+  function getISOTimestampWithTimezone() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    
+    const offset = -now.getTimezoneOffset();
+    const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
+    const offsetMinutes = String(Math.abs(offset) % 60).padStart(2, '0');
+    const offsetSign = offset >= 0 ? '+' : '-';
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
+  }
+  
+  // 格式化显示时间（显示为当地时间）
+  function formatLocalTime(isoString) {
+    if (!isoString) return '未知时间';
+    try {
+      const date = new Date(isoString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    } catch (e) {
+      return isoString;
+    }
   }
 
   async function findHealthWorldFile() {
     try {
       const moduleWI = await import('/scripts/world-info.js');
       const selected = moduleWI.selected_world_info || [];
-      debugLog('selected_world_info:', selected);
       for (const WI of selected) {
         if (WI.includes('健康生活助手')) {
-          debugLog('匹配到世界书文件:', WI);
           return WI;
         }
       }
-      debugLog('未找到名为 "健康生活助手" 的世界书文件');
+      toastr.warning('未找到名为 "健康生活助手" 的世界书文件');
       return null;
     } catch (e) {
-      debugLog('findHealthWorldFile 异常:', e.message || e);
+      toastr.error('查找世界书文件失败: ' + e.message);
       return null;
     }
   }
 
-  async function appendToWorldInfoDietLog(meal, contentText) {
+  // ========== 写入世界书：使用 ISO 时间戳 ==========
+  async function appendToWorldInfoDietLog(meal, contentText, isoTimestamp) {
     try {
       const fileId = await findHealthWorldFile();
-      if (!fileId) { debugLog('写入世界书: 未找到世界书文件，跳过写入'); return; }
+      if (!fileId) { 
+        toastr.warning('写入世界书: 未找到世界书文件，跳过写入'); 
+        return; 
+      }
 
       const moduleWI = await import('/scripts/world-info.js');
       const worldInfo = await moduleWI.loadWorldInfo(fileId);
       const entries = worldInfo.entries || {};
-      debugLog('loadWorldInfo entries count:', Object.keys(entries).length);
 
       let targetUID = null;
       for (const id in entries) {
@@ -2462,40 +3602,50 @@ async function showPomodoro() {
         const comment = entry.comment || '';
         if (!entry.disable && (comment.includes('饮食') || entry.title === '饮食')) {
           targetUID = entry.uid;
-          debugLog('找到饮食 entry: uid=', targetUID, 'comment=', comment);
           break;
         }
       }
 
       if (!targetUID) {
-        debugLog('未找到饮食 entry（未创建），写入被跳过。');
+        toastr.warning('未找到饮食 entry（未创建），写入被跳过。');
         return;
       }
 
-      const recLine = `${meal} @ ${new Date().toLocaleString()} ：${contentText}`;
+      const recLine = `${isoTimestamp}:${meal}:${contentText}`;
       const existing = entries[targetUID].content || '';
       const newContent = existing + (existing ? '\n' : '') + recLine;
 
-      debugLog('准备写入 world entry:', { file: fileId, uid: targetUID, newLine: recLine });
       await globalThis.SillyTavern.getContext()
         .SlashCommandParser.commands['setentryfield']
         .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
 
-      debugLog('写入世界书成功:', recLine);
+      toastr.success('写入世界书成功');
     } catch (e) {
-      debugLog('写入世界书失败:', e.message || e);
+      toastr.error('写入世界书失败: ' + e.message);
     }
   }
 
   function recordDiet(meal) {
     const text = prompt(`记录 ${meal} 内容：`, '');
     if (!text) return;
-    const now = new Date();
-    ctx.extensionSettings[MODULE_NAME].diet.push({ meal, text, ts: now.toISOString() });
+    
+    const isoTimestamp = getISOTimestampWithTimezone();
+    
+    if (!ctx.extensionSettings[MODULE_NAME].diet) {
+      ctx.extensionSettings[MODULE_NAME].diet = [];
+    }
+    
+    ctx.extensionSettings[MODULE_NAME].diet.push({ 
+      meal, 
+      text, 
+      ts: isoTimestamp,
+      enabled: true 
+    });
     saveSettings();
-    alert(`${meal} 已记录：${text}`);
+    toastr.success(`${meal} 已记录：${text}`);
     renderLog();
-    appendToWorldInfoDietLog(meal, text);
+    
+    appendToWorldInfoDietLog(meal, text, isoTimestamp);
   }
 
   ['breakfast', 'lunch', 'dinner', 'other'].forEach(id => {
@@ -2511,12 +3661,12 @@ async function showPomodoro() {
       const api = ctx.extensionSettings[MODULE_NAME].apiConfig || {};
       if (!api.url) {
         subPanel.innerText = '未配置独立 API，示例建议：早餐优先蛋白质、全谷物；午餐/晚餐控制份量，多蔬菜。';
-        debugLog('饮食建议: 未配置 API');
+        toastr.warning('饮食建议: 未配置 API');
         return;
       }
 
       const endpoint = api.url.replace(/\/$/, '') + '/v1/chat/completions';
-      debugLog('饮食建议调用: 请求将发送到', endpoint, 'model:', api.model);
+      toastr.info('正在调用饮食建议 API...');
 
       const history = ctx.extensionSettings[MODULE_NAME].diet.map(d => `${d.meal}：${d.text}`).join('\n');
       const res = await fetch(endpoint, {
@@ -2534,20 +3684,549 @@ async function showPomodoro() {
           max_tokens: 5000
         })
       });
-      debugLog('饮食建议调用: HTTP 状态', res.status);
+      
       if (!res.ok) throw new Error('HTTP ' + res.status);
 
       const data = await res.json();
       const text = data.choices?.[0]?.message?.content || JSON.stringify(data);
       subPanel.innerText = text;
       subPanel.scrollTop = subPanel.scrollHeight;
-      debugLog('饮食建议调用: 返回摘录', text.slice(0, 200));
+      toastr.success('饮食建议获取成功');
     } catch (e) {
       subPanel.innerText = 'API 请求失败：' + (e.message || e);
       subPanel.scrollTop = subPanel.scrollHeight;
-      debugLog('饮食建议调用失败:', e.message || e);
+      toastr.error('饮食建议调用失败: ' + e.message);
     }
   });
+
+  // === 饮食记录管理功能 ===
+  
+  function getLocalStorageEntries(mealType) {
+    const allDiet = ctx.extensionSettings[MODULE_NAME].diet || [];
+    const filtered = allDiet.map((entry, index) => ({
+      text: entry.text || entry,
+      ts: entry.ts || '',
+      meal: entry.meal || '',
+      index: index,
+      enabled: entry.enabled !== false
+    })).filter(e => !mealType || e.meal === mealType);
+    return filtered;
+  }
+  
+  function deleteLocalStorageEntry(index) {
+    if (!ctx.extensionSettings[MODULE_NAME].diet) return;
+    ctx.extensionSettings[MODULE_NAME].diet.splice(index, 1);
+    saveSettings();
+  }
+  
+  function updateLocalStorageEntryEnabled(index, enabled) {
+    if (!ctx.extensionSettings[MODULE_NAME].diet) return;
+    const entry = ctx.extensionSettings[MODULE_NAME].diet[index];
+    if (typeof entry === 'object') {
+      entry.enabled = enabled;
+    } else {
+      ctx.extensionSettings[MODULE_NAME].diet[index] = {
+        text: entry,
+        meal: 'other',
+        ts: getISOTimestampWithTimezone(),
+        enabled: enabled
+      };
+    }
+    saveSettings();
+  }
+  
+  async function deleteLineFromWorldInfo(meal, isoTimestamp, text) {
+    try {
+      const fileId = await findHealthWorldFile();
+      if (!fileId) return false;
+      
+      const moduleWI = await import('/scripts/world-info.js');
+      const worldInfo = await moduleWI.loadWorldInfo(fileId);
+      const entries = worldInfo.entries || {};
+      
+      let targetUID = null;
+      let targetContent = '';
+      for (const id in entries) {
+        const entry = entries[id];
+        const comment = entry.comment || '';
+        if (!entry.disable && (comment.includes('饮食') || entry.title === '饮食')) {
+          targetUID = entry.uid;
+          targetContent = entry.content || '';
+          break;
+        }
+      }
+      
+      if (!targetUID) return false;
+      
+      const lineToDelete = `${isoTimestamp}:${meal}:${text}`;
+      
+      const lines = targetContent.split('\n');
+      const newLines = lines.filter(line => line.trim() !== lineToDelete.trim());
+      const newContent = newLines.join('\n');
+      
+      await globalThis.SillyTavern.getContext()
+        .SlashCommandParser.commands['setentryfield']
+        .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+      
+      return true;
+    } catch (e) {
+      toastr.error('从世界书删除失败: ' + e.message);
+      return false;
+    }
+  }
+  
+  async function appendToWorldInfoEntry(meal, isoTimestamp, text) {
+    try {
+      const fileId = await findHealthWorldFile();
+      if (!fileId) {
+        toastr.warning('未找到世界书文件');
+        return;
+      }
+      const moduleWI = await import('/scripts/world-info.js');
+      const worldInfo = await moduleWI.loadWorldInfo(fileId);
+      const entries = worldInfo.entries || {};
+      
+      let targetUID = null;
+      for (const id in entries) {
+        const entry = entries[id];
+        const comment = entry.comment || '';
+        if (!entry.disable && (comment.includes('饮食') || entry.title === '饮食')) {
+          targetUID = entry.uid;
+          break;
+        }
+      }
+      
+      if (!targetUID) {
+        toastr.warning('未找到"饮食"条目');
+        return;
+      }
+      
+      const recLine = `${isoTimestamp}:${meal}:${text}`;
+      const existing = entries[targetUID].content || '';
+      const newContent = existing + (existing ? '\n' : '') + recLine;
+      
+      await globalThis.SillyTavern.getContext()
+        .SlashCommandParser.commands['setentryfield']
+        .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+      
+      toastr.success('已同步到世界书"饮食"条目');
+    } catch (e) {
+      toastr.error('写入世界书失败: ' + e.message);
+    }
+  }
+  
+  // 饮食记录管理按钮
+  document.getElementById('ha-diet-stats').addEventListener('click', () => {
+    let statsModal = document.getElementById('ha-diet-stats-modal');
+    if (!statsModal) {
+      statsModal = document.createElement('div');
+      statsModal.id = 'ha-diet-stats-modal';
+      statsModal.className = 'ha-diet-stats-modal';
+      
+      statsModal.innerHTML = `
+        <div class="ha-diet-stats-header">
+          <span class="ha-diet-stats-title">饮食记录管理</span>
+          <button id="close-diet-stats" class="ha-diet-stats-close">&times;</button>
+        </div>
+        <div class="ha-diet-stats-buttons">
+          <button id="stats-breakfast" class="ha-btn ha-diet-stats-btn">早餐统计</button>
+          <button id="stats-lunch" class="ha-btn ha-diet-stats-btn">午餐统计</button>
+          <button id="stats-dinner" class="ha-btn ha-diet-stats-btn">晚餐统计</button>
+          <button id="stats-other" class="ha-btn">其他统计</button>
+        </div>
+        <div id="diet-stats-content" class="ha-diet-stats-content">
+          <p class="ha-diet-stats-empty">请选择一个统计类型</p>
+        </div>
+      `;
+      
+      document.body.appendChild(statsModal);
+      
+      statsModal.querySelector('#close-diet-stats').addEventListener('click', () => {
+        statsModal.style.display = 'none';
+      });
+      
+      function showStatsList(mealType, mealName) {
+        const entries = getLocalStorageEntries(mealType);
+        const contentDiv = statsModal.querySelector('#diet-stats-content');
+        
+        if (entries.length === 0) {
+          contentDiv.innerHTML = `<p class="ha-diet-stats-empty">暂无${mealName}记录</p>`;
+          return;
+        }
+        
+        let html = `<div class="ha-diet-stats-list-title">${mealName}记录 (共${entries.length}条)</div>`;
+        
+        entries.forEach(entry => {
+          const tsDisplay = formatLocalTime(entry.ts);
+          const enabledClass = entry.enabled ? 'enabled' : 'disabled';
+          const badgeClass = entry.enabled ? 'ha-diet-record-badge-enabled' : 'ha-diet-record-badge-disabled';
+          const statusText = entry.enabled ? '[已启用]' : '[未启用]';
+          
+          html += `
+            <div class="ha-diet-record-item ${enabledClass}">
+              <div class="ha-diet-record-time">
+                ${tsDisplay} <span class="${badgeClass}">${statusText}</span>
+              </div>
+              <div class="ha-diet-record-text">${entry.text}</div>
+              <div class="ha-diet-record-actions">
+                <button class="edit-entry ha-btn ha-diet-record-btn" data-index="${entry.index}">编辑</button>
+                ${entry.enabled 
+                  ? `<button class="disable-entry ha-btn ha-diet-record-btn" data-index="${entry.index}">取消启用</button>`
+                  : `<button class="enable-entry ha-btn ha-diet-record-btn" data-index="${entry.index}">启用</button>`
+                }
+                <button class="delete-entry ha-btn ha-diet-record-btn ha-diet-record-btn-delete" data-index="${entry.index}">删除</button>
+              </div>
+            </div>
+          `;
+        });
+        
+        contentDiv.innerHTML = html;
+        
+        // 编辑按钮
+        contentDiv.querySelectorAll('.edit-entry').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const index = parseInt(btn.dataset.index);
+            const entry = entries.find(e => e.index === index);
+            
+            const newText = prompt('编辑记录内容:', entry.text);
+            if (!newText) return;
+            
+            let defaultTime;
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            
+            switch(entry.meal) {
+              case 'breakfast':
+                defaultTime = `${year}-${month}-${day}T07:00`;
+                break;
+              case 'lunch':
+                defaultTime = `${year}-${month}-${day}T12:00`;
+                break;
+              case 'dinner':
+                defaultTime = `${year}-${month}-${day}T17:00`;
+                break;
+              default:
+                const now = new Date();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                defaultTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+            }
+            
+            const timeInput = prompt('编辑时间 (格式: YYYY-MM-DDTHH:MM, 例如 2025-11-16T07:00):', defaultTime);
+            if (!timeInput) return;
+            
+            let newISOTimestamp;
+            try {
+              const parsedDate = new Date(timeInput);
+              if (isNaN(parsedDate.getTime())) {
+                toastr.error('时间格式错误,请使用格式: YYYY-MM-DDTHH:MM');
+                return;
+              }
+              
+              const year = parsedDate.getFullYear();
+              const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+              const day = String(parsedDate.getDate()).padStart(2, '0');
+              const hours = String(parsedDate.getHours()).padStart(2, '0');
+              const minutes = String(parsedDate.getMinutes()).padStart(2, '0');
+              const seconds = String(parsedDate.getSeconds()).padStart(2, '0');
+              
+              const offset = -parsedDate.getTimezoneOffset();
+              const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
+              const offsetMinutes = String(Math.abs(offset) % 60).padStart(2, '0');
+              const offsetSign = offset >= 0 ? '+' : '-';
+              
+              newISOTimestamp = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
+            } catch (e) {
+              toastr.error('时间格式错误: ' + e.message);
+              return;
+            }
+            
+            if (entry.enabled) {
+              await deleteLineFromWorldInfo(entry.meal, entry.ts, entry.text);
+            }
+            
+            const dietEntry = ctx.extensionSettings[MODULE_NAME].diet[index];
+            if (typeof dietEntry === 'object') {
+              dietEntry.text = newText;
+              dietEntry.ts = newISOTimestamp;
+            } else {
+              ctx.extensionSettings[MODULE_NAME].diet[index] = {
+                text: newText,
+                meal: entry.meal,
+                ts: newISOTimestamp,
+                enabled: entry.enabled
+              };
+            }
+            saveSettings();
+            
+            if (entry.enabled) {
+              await appendToWorldInfoEntry(entry.meal, newISOTimestamp, newText);
+            }
+            
+            toastr.success('编辑成功');
+            showStatsList(mealType, mealName);
+          });
+        });
+        
+        // 删除按钮
+        contentDiv.querySelectorAll('.delete-entry').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('确定要删除此条记录吗?')) return;
+            
+            const index = parseInt(btn.dataset.index);
+            const entry = entries.find(e => e.index === index);
+            
+            if (entry.enabled) {
+              const success = await deleteLineFromWorldInfo(entry.meal, entry.ts, entry.text);
+              if (success) {
+                toastr.success('已从世界书删除');
+              }
+            }
+            
+            deleteLocalStorageEntry(index);
+            
+            toastr.success('删除成功');
+            showStatsList(mealType, mealName);
+            renderLog();
+          });
+        });
+        
+        // 取消启用按钮
+        contentDiv.querySelectorAll('.disable-entry').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const index = parseInt(btn.dataset.index);
+            const entry = entries.find(e => e.index === index);
+            
+            const success = await deleteLineFromWorldInfo(entry.meal, entry.ts, entry.text);
+            
+            if (success) {
+              updateLocalStorageEntryEnabled(index, false);
+              toastr.success('已取消启用');
+              showStatsList(mealType, mealName);
+            } else {
+              toastr.error('取消启用失败');
+            }
+          });
+        });
+        
+        // 启用按钮
+        contentDiv.querySelectorAll('.enable-entry').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const index = parseInt(btn.dataset.index);
+            const entry = entries.find(e => e.index === index);
+            
+            await appendToWorldInfoEntry(entry.meal, entry.ts, entry.text);
+            
+            updateLocalStorageEntryEnabled(index, true);
+            
+            toastr.success('已启用并同步到世界书');
+            showStatsList(mealType, mealName);
+          });
+        });
+      }
+      
+      statsModal.querySelector('#stats-breakfast').addEventListener('click', () => {
+        showStatsList('breakfast', '早餐');
+      });
+      
+      statsModal.querySelector('#stats-lunch').addEventListener('click', () => {
+        showStatsList('lunch', '午餐');
+      });
+      
+      statsModal.querySelector('#stats-dinner').addEventListener('click', () => {
+        showStatsList('dinner', '晚餐');
+      });
+      
+      statsModal.querySelector('#stats-other').addEventListener('click', () => {
+        showStatsList('other', '其他');
+      });
+    }
+    
+    statsModal.style.display = 'flex';
+  });
+
+  // ========== 定期清除功能 ==========
+  
+  // 定期清除按钮
+  document.getElementById('ha-diet-auto-clean').addEventListener('click', () => {
+    openAutoCleanPanel();
+  });
+  
+  // 定期清除面板
+  function openAutoCleanPanel() {
+    const panel = document.createElement('div');
+    panel.className = 'ha-sleep-records-overlay';
+    
+    // 读取当前配置
+    const config = ctx.extensionSettings[MODULE_NAME].dietAutoClean || {
+      days: 30,
+      cleanLocalStorage: false,
+      cleanWorldBook: false
+    };
+    
+    panel.innerHTML = `
+      <div class="ha-sleep-records-panel" style="max-width: 400px;">
+        <div class="ha-sleep-records-title">定期清除设置</div>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px;">清除天数（保留最近N天）:</label>
+          <input type="number" id="auto-clean-days" value="${config.days}" min="1" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+          <div style="font-size: 11px; color: #666; margin-top: 2px;">例如: 输入30表示保留最近30天的记录</div>
+        </div>
+        <div style="margin-bottom: 12px;">
+          <button id="auto-clean-localstorage" class="ha-btn" style="width: 100%; margin-bottom: 6px; ${config.cleanLocalStorage ? 'background: #f44336; color: #fff;' : ''}">
+            ${config.cleanLocalStorage ? '✓ ' : ''}清除 localStorage
+          </button>
+          <button id="auto-clean-worldbook" class="ha-btn" style="width: 100%; ${config.cleanWorldBook ? 'background: #f44336; color: #fff;' : ''}">
+            ${config.cleanWorldBook ? '✓ ' : ''}清除世界书
+          </button>
+        </div>
+        <div style="font-size: 12px; color: #666; padding: 8px; background: #f9f9f9; border-radius: 4px; margin-bottom: 12px;">
+          <strong>说明:</strong> 每天04:00自动清除过期记录。如果04:00时浏览器未打开，则在扩展下次启动时执行清除。
+        </div>
+        <div class="ha-sleep-records-footer">
+          <button id="auto-clean-save" class="ha-btn" style="background: #4CAF50; color: #fff;">保存设置</button>
+          <button id="auto-clean-close" class="ha-btn" style="margin-left: 6px;">关闭</button>
+        </div>
+      </div>
+    `;
+    
+    content.appendChild(panel);
+    
+    let cleanLocalStorage = config.cleanLocalStorage;
+    let cleanWorldBook = config.cleanWorldBook;
+    
+    // 切换 localStorage 清除
+    panel.querySelector('#auto-clean-localstorage').addEventListener('click', (e) => {
+      cleanLocalStorage = !cleanLocalStorage;
+      const btn = e.target;
+      if (cleanLocalStorage) {
+        btn.style.background = '#f44336';
+        btn.style.color = '#fff';
+        btn.textContent = '✓ 清除 localStorage';
+      } else {
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.textContent = '清除 localStorage';
+      }
+    });
+    
+    // 切换世界书清除
+    panel.querySelector('#auto-clean-worldbook').addEventListener('click', (e) => {
+      cleanWorldBook = !cleanWorldBook;
+      const btn = e.target;
+      if (cleanWorldBook) {
+        btn.style.background = '#f44336';
+        btn.style.color = '#fff';
+        btn.textContent = '✓ 清除世界书';
+      } else {
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.textContent = '清除世界书';
+      }
+    });
+    
+    // 保存设置
+    panel.querySelector('#auto-clean-save').addEventListener('click', () => {
+      const days = parseInt(panel.querySelector('#auto-clean-days').value);
+      if (isNaN(days) || days < 1) {
+        toastr.warning('请输入有效的天数（至少为1）', '输入错误');
+        return;
+      }
+      
+      ctx.extensionSettings[MODULE_NAME].dietAutoClean = {
+        days,
+        cleanLocalStorage,
+        cleanWorldBook,
+        lastCleanDate: ctx.extensionSettings[MODULE_NAME].dietAutoClean?.lastCleanDate || null
+      };
+      saveSettings();
+      toastr.success('定期清除设置已保存', '保存成功');
+      panel.remove();
+    });
+    
+    panel.querySelector('#auto-clean-close').onclick = () => panel.remove();
+  }
+  
+  // 执行定期清除
+  async function performAutoClean(daysToKeep) {
+    const config = ctx.extensionSettings[MODULE_NAME].dietAutoClean;
+    if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+      return;
+    }
+    
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+    
+    // 解析ISO日期字符串获取日期部分
+    function parseISODate(isoString) {
+      const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!match) return null;
+      return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+    }
+    
+    const records = ctx.extensionSettings[MODULE_NAME].diet || [];
+    
+    // 清除 localStorage
+    if (config.cleanLocalStorage) {
+      const filteredRecords = records.filter(rec => {
+        const recDate = parseISODate(rec.ts);
+        return recDate && recDate >= cutoffDate;
+      });
+      
+      const removedCount = records.length - filteredRecords.length;
+      if (removedCount > 0) {
+        ctx.extensionSettings[MODULE_NAME].diet = filteredRecords;
+        saveSettings();
+        console.log(`[健康生活助手] 自动清除: 从 localStorage 删除了 ${removedCount} 条饮食记录`);
+      }
+    }
+    
+    // 清除世界书
+    if (config.cleanWorldBook) {
+      try {
+        const fileId = await findHealthWorldFile();
+        if (!fileId) return;
+        
+        const moduleWI = await import('/scripts/world-info.js');
+        const worldInfo = await moduleWI.loadWorldInfo(fileId);
+        const entries = worldInfo.entries || {};
+        
+        let targetUID = null;
+        for (const id in entries) {
+          const entry = entries[id];
+          const comment = entry.comment || '';
+          if (!entry.disable && (comment.includes('饮食') || entry.title === '饮食')) {
+            targetUID = entry.uid;
+            break;
+          }
+        }
+        
+        if (!targetUID) return;
+        
+        // 获取当前启用的记录（已经是过滤后的）
+        const currentRecords = ctx.extensionSettings[MODULE_NAME].diet || [];
+        const enabledRecords = currentRecords.filter(rec => rec.enabled !== false);
+        
+        const newContent = enabledRecords.map(rec => {
+          return `${rec.ts}:${rec.meal}:${rec.text}`;
+        }).join('\n');
+        
+        await globalThis.SillyTavern.getContext()
+          .SlashCommandParser.commands['setentryfield']
+          .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+        
+        console.log('[健康生活助手] 自动清除: 已同步世界书');
+      } catch (e) {
+        console.error('[健康生活助手] 自动清除世界书失败:', e);
+      }
+    }
+    
+    // 更新最后清除日期
+    config.lastCleanDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    saveSettings();
+  }
 
   function renderLog() {
     const arr = ctx.extensionSettings[MODULE_NAME].diet || [];
@@ -2555,9 +4234,48 @@ async function showPomodoro() {
   }
 
   renderLog();
+  
+ 
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 async function showMental() {
+    // 生成带时区偏移的ISO格式时间戳
+    function getISOWithTimezone(date = new Date()) {
+        const offset = -date.getTimezoneOffset();
+        const sign = offset >= 0 ? '+' : '-';
+        const absOffset = Math.abs(offset);
+        const hours = String(Math.floor(absOffset / 60)).padStart(2, '0');
+        const minutes = String(absOffset % 60).padStart(2, '0');
+        
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hour = String(date.getHours()).padStart(2, '0');
+        const minute = String(date.getMinutes()).padStart(2, '0');
+        const second = String(date.getSeconds()).padStart(2, '0');
+        const ms = String(date.getMilliseconds()).padStart(3, '0');
+        
+        return `${year}-${month}-${day}T${hour}:${minute}:${second}.${ms}${sign}${hours}:${minutes}`;
+    }
+    
+   
+        
+    
     content.style.display = 'block';
     content.innerHTML = `<div style="font-weight:600;margin-bottom:6px">心理健康</div>
         <div style="margin-bottom:6px">
@@ -2569,6 +4287,9 @@ async function showMental() {
             <button id="ha-confession" class="ha-btn" style="margin-bottom:6px">忏悔室</button>
             <button id="ha-listen-confession" class="ha-btn" style="margin-bottom:6px;margin-left:6px">聆听忏悔</button>
             <button id="ha-mental-stats" class="ha-btn" style="margin-bottom:6px;margin-left:6px">心理统计</button>
+        </div>
+        <div style="margin-bottom:6px">
+            <button id="ha-mental-auto-clean" class="ha-btn" style="margin-bottom:6px">定期清除</button>
         </div>
         <div style="margin-bottom:6px">
             <label style="display:block;font-size:12px;color:#666">正念冥想计时(分钟,0=即时指导)</label>
@@ -2640,7 +4361,7 @@ async function showMental() {
                 return;
             }
             
-            const recLine = `${new Date().toLocaleString()}:${contentText}`;
+            const recLine = `${getISOWithTimezone()}:${contentText}`;
             const existing = entries[targetUID].content || '';
             const newContent = existing + (existing ? '\n' : '') + recLine;
             
@@ -2661,7 +4382,7 @@ async function showMental() {
             text: entry.text || entry,
             ts: entry.ts || '',
             index: index,
-            enabled: entry.enabled !== false // 默认启用
+            enabled: entry.enabled !== false
         }));
     }
     
@@ -2679,10 +4400,9 @@ async function showMental() {
         if (typeof entry === 'object') {
             entry.enabled = enabled;
         } else {
-            // 如果是旧格式的字符串,转换为对象
             ctx.extensionSettings[MODULE_NAME][storageKey][index] = {
                 text: entry,
-                ts: new Date().toISOString(),
+                ts: getISOWithTimezone(),
                 enabled: enabled
             };
         }
@@ -2698,7 +4418,7 @@ async function showMental() {
         } else {
             ctx.extensionSettings[MODULE_NAME][storageKey][index] = {
                 text: newText,
-                ts: new Date().toISOString(),
+                ts: getISOWithTimezone(),
                 enabled: true
             };
         }
@@ -2779,7 +4499,7 @@ async function showMental() {
         
         ctx.extensionSettings[MODULE_NAME].mental.push({
             text: txt,
-            ts: new Date().toISOString(),
+            ts: getISOWithTimezone(),
             enabled: true
         });
         saveSettings();
@@ -2799,7 +4519,7 @@ async function showMental() {
         
         ctx.extensionSettings[MODULE_NAME].thoughtChains.push({
             text: txt,
-            ts: new Date().toISOString(),
+            ts: getISOWithTimezone(),
             enabled: true
         });
         saveSettings();
@@ -2818,7 +4538,7 @@ async function showMental() {
         
         ctx.extensionSettings[MODULE_NAME].confessions.push({
             text: txt,
-            ts: new Date().toISOString(),
+            ts: getISOWithTimezone(),
             enabled: true
         });
         saveSettings();
@@ -3084,7 +4804,7 @@ async function showMental() {
                     
                     // 如果启用状态,更新世界书
                     if (entry.enabled) {
-                        const fullOldLine = `${new Date(entry.ts).toLocaleString()}:${entry.text}`;
+                        const fullOldLine = `${entry.ts}:${entry.text}`;
                         await deleteLineFromWorldInfo(keyword, fullOldLine);
                         await appendToWorldInfoEntry(keyword, newText);
                     }
@@ -3104,7 +4824,7 @@ async function showMental() {
                     
                     // 如果启用状态,从世界书删除
                     if (entry.enabled) {
-                        const fullLine = `${new Date(entry.ts).toLocaleString()}:${entry.text}`;
+                        const fullLine = `${entry.ts}:${entry.text}`;
                         await deleteLineFromWorldInfo(keyword, fullLine);
                     }
                     
@@ -3123,7 +4843,7 @@ async function showMental() {
                     const entry = entries.find(e => e.index === index);
                     
                     // 只从世界书删除
-                    const fullLine = `${new Date(entry.ts).toLocaleString()}:${entry.text}`;
+                    const fullLine = `${entry.ts}:${entry.text}`;
                     await deleteLineFromWorldInfo(keyword, fullLine);
                     
                     // 更新localStorage的启用状态
@@ -3168,6 +4888,182 @@ async function showMental() {
             showStatsList('confessions', '忏悔');
         });
     });
+    
+    // === 定期清除按钮 ===
+    document.getElementById('ha-mental-auto-clean').addEventListener('click', () => {
+        openMentalAutoCleanPanel();
+    });
+    
+    // 定期清除面板
+    function openMentalAutoCleanPanel() {
+        const panel = document.createElement('div');
+        panel.className = 'ha-sleep-records-overlay';
+        
+        const config = ctx.extensionSettings[MODULE_NAME].mentalAutoClean || {
+            days: 30,
+            cleanLocalStorage: false,
+            cleanWorldBook: false
+        };
+        
+        panel.innerHTML = `
+            <div class="ha-sleep-records-panel" style="max-width: 400px;">
+                <div class="ha-sleep-records-title">定期清除设置</div>
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; margin-bottom: 4px; font-size: 13px;">清除天数（保留最近N天）:</label>
+                    <input type="number" id="mental-auto-clean-days" value="${config.days}" min="1" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <div style="font-size: 11px; color: #666; margin-top: 2px;">例如: 输入30表示保留最近30天的记录</div>
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <button id="mental-auto-clean-localstorage" class="ha-btn" style="width: 100%; margin-bottom: 6px; ${config.cleanLocalStorage ? 'background: #f44336; color: #fff;' : ''}">
+                        ${config.cleanLocalStorage ? '✓ ' : ''}清除 localStorage
+                    </button>
+                    <button id="mental-auto-clean-worldbook" class="ha-btn" style="width: 100%; ${config.cleanWorldBook ? 'background: #f44336; color: #fff;' : ''}">
+                        ${config.cleanWorldBook ? '✓ ' : ''}清除世界书
+                    </button>
+                </div>
+                <div style="font-size: 12px; color: #666; padding: 8px; background: #f9f9f9; border-radius: 4px; margin-bottom: 12px;">
+                    <strong>说明:</strong> 每天04:00自动清除过期记录。如果04:00时浏览器未打开，则在扩展下次启动时执行清除。
+                </div>
+                <div class="ha-sleep-records-footer">
+                    <button id="mental-auto-clean-save" class="ha-btn" style="background: #4CAF50; color: #fff;">保存设置</button>
+                    <button id="mental-auto-clean-close" class="ha-btn" style="margin-left: 6px;">关闭</button>
+                </div>
+            </div>
+        `;
+        
+        content.appendChild(panel);
+        
+        let cleanLocalStorage = config.cleanLocalStorage;
+        let cleanWorldBook = config.cleanWorldBook;
+        
+        panel.querySelector('#mental-auto-clean-localstorage').addEventListener('click', (e) => {
+            cleanLocalStorage = !cleanLocalStorage;
+            const btn = e.target;
+            if (cleanLocalStorage) {
+                btn.style.background = '#f44336';
+                btn.style.color = '#fff';
+                btn.textContent = '✓ 清除 localStorage';
+            } else {
+                btn.style.background = '';
+                btn.style.color = '';
+                btn.textContent = '清除 localStorage';
+            }
+        });
+        
+        panel.querySelector('#mental-auto-clean-worldbook').addEventListener('click', (e) => {
+            cleanWorldBook = !cleanWorldBook;
+            const btn = e.target;
+            if (cleanWorldBook) {
+                btn.style.background = '#f44336';
+                btn.style.color = '#fff';
+                btn.textContent = '✓ 清除世界书';
+            } else {
+                btn.style.background = '';
+                btn.style.color = '';
+                btn.textContent = '清除世界书';
+            }
+        });
+        
+        panel.querySelector('#mental-auto-clean-save').addEventListener('click', () => {
+            const days = parseInt(panel.querySelector('#mental-auto-clean-days').value);
+            if (isNaN(days) || days < 1) {
+                toastr.warning('请输入有效的天数（至少为1）', '输入错误');
+                return;
+            }
+            
+            ctx.extensionSettings[MODULE_NAME].mentalAutoClean = {
+                days,
+                cleanLocalStorage,
+                cleanWorldBook,
+                lastCleanDate: ctx.extensionSettings[MODULE_NAME].mentalAutoClean?.lastCleanDate || null
+            };
+            saveSettings();
+            toastr.success('定期清除设置已保存', '保存成功');
+            panel.remove();
+        });
+        
+        panel.querySelector('#mental-auto-clean-close').onclick = () => panel.remove();
+    }
+    
+    // 执行定期清除
+    async function performMentalAutoClean(daysToKeep) {
+        const config = ctx.extensionSettings[MODULE_NAME].mentalAutoClean;
+        if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+            return;
+        }
+        
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+        
+        function parseISODate(isoString) {
+            const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (!match) return null;
+            return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+        }
+        
+        const storageKeys = ['mental', 'meditation', 'thoughtChains', 'confessions'];
+        const keywords = ['心理', '冥想', '思维链', '忏悔'];
+        
+        for (let i = 0; i < storageKeys.length; i++) {
+            const storageKey = storageKeys[i];
+            const keyword = keywords[i];
+            const records = ctx.extensionSettings[MODULE_NAME][storageKey] || [];
+            
+            if (config.cleanLocalStorage) {
+                const filteredRecords = records.filter(rec => {
+                    const recDate = parseISODate(rec.ts);
+                    return recDate && recDate >= cutoffDate;
+                });
+                
+                const removedCount = records.length - filteredRecords.length;
+                if (removedCount > 0) {
+                    ctx.extensionSettings[MODULE_NAME][storageKey] = filteredRecords;
+                    console.log(`[健康生活助手] 自动清除: 从 localStorage/${storageKey} 删除了 ${removedCount} 条记录`);
+                }
+            }
+            
+            if (config.cleanWorldBook) {
+                try {
+                    const fileId = await findHealthWorldFile();
+                    if (!fileId) continue;
+                    
+                    const moduleWI = await import('/scripts/world-info.js');
+                    const worldInfo = await moduleWI.loadWorldInfo(fileId);
+                    const entries = worldInfo.entries || {};
+                    
+                    let targetUID = null;
+                    for (const id in entries) {
+                        const entry = entries[id];
+                        const comment = entry.comment || '';
+                        if (!entry.disable && (comment.includes(keyword) || entry.title === keyword)) {
+                            targetUID = entry.uid;
+                            break;
+                        }
+                    }
+                    
+                    if (!targetUID) continue;
+                    
+                    const currentRecords = ctx.extensionSettings[MODULE_NAME][storageKey] || [];
+                    const enabledRecords = currentRecords.filter(rec => rec.enabled !== false);
+                    
+                    const newContent = enabledRecords.map(rec => {
+                        return `${rec.ts}:${rec.text}`;
+                    }).join('\n');
+                    
+                    await globalThis.SillyTavern.getContext()
+                        .SlashCommandParser.commands['setentryfield']
+                        .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+                    
+                    console.log(`[健康生活助手] 自动清除: 已同步世界书/${keyword}`);
+                } catch (e) {
+                    console.error(`[健康生活助手] 自动清除世界书/${keyword}失败:`, e);
+                }
+            }
+        }
+        
+        config.lastCleanDate = new Date().toISOString().split('T')[0];
+        saveSettings();
+    }
     
     // === 冥想开始 ===
     btnStart.addEventListener('click', async () => {
@@ -3251,20 +5147,18 @@ async function showMental() {
         btnStop.style.display = 'none';
         timerEl.innerText = `本次冥想结束,共进行 ${duration} 分钟`;
         
-        // 保存到localStorage
         if (!ctx.extensionSettings[MODULE_NAME].meditation) {
             ctx.extensionSettings[MODULE_NAME].meditation = [];
         }
         
         const record = {
             text: `本次冥想 ${duration} 分钟`,
-            ts: new Date().toISOString(),
+            ts: getISOWithTimezone(),
             enabled: true
         };
         ctx.extensionSettings[MODULE_NAME].meditation.push(record);
         saveSettings();
         
-        // 同步到世界书
         appendToWorldInfoEntry('冥想', record.text);
         
         startTime = null;
@@ -3276,63 +5170,107 @@ async function showMental() {
         logEl.innerText = `已记录 ${arr.length} 条情绪记录(存储在扩展设置与世界书中)`;
     }
     renderLog();
+    
+  
 }
 
-      async function showExercise() {
-  content.style.display = 'block';
-  content.innerHTML = `
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    async function showExercise() {
+  const container = content;
+  container.style.display = 'block';
+  
+ 
+    
+  
+  container.innerHTML = `
     <div style="font-weight:600;margin-bottom:6px">适度运动</div>
     <div style="display:flex;gap:8px;margin-bottom:6px">
       <button id="ha-exercise-log" class="ha-btn" style="flex:1">运动打卡</button>
-      <button id="ha-exercise-analysis" class="ha-btn" style="flex:1">运动分析（API）</button>
+      <button id="ha-exercise-analysis" class="ha-btn" style="flex:1">运动分析(API)</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:6px">
+      <button id="ha-exercise-records" class="ha-btn" style="flex:1">运动记录管理</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:6px">
+      <button id="ha-exercise-auto-clean" class="ha-btn" style="flex:1">定期清除</button>
     </div>
     <div id="ha-exercise-subpanel" 
          style="margin-top:6px;padding:6px;border:1px solid #ddd;background:#f9f9f9;white-space:pre-wrap;min-height:60px;max-height:200px;overflow:auto;display:block;">
     </div>
     <div id="ha-exercise-list" class="ha-small"></div>
-    <div id="ha-exercise-debug" style="margin-top:8px;padding:6px;border:1px solid #ddd;font-size:12px;max-height:160px;overflow:auto;background:#fafafa;white-space:pre-wrap"></div>
   `;
 
   const listEl = document.getElementById('ha-exercise-list');
-  const debugEl = document.getElementById('ha-exercise-debug');
   const subPanel = document.getElementById('ha-exercise-subpanel');
 
-  function debugLog(...args) {
-    const ts = new Date().toLocaleTimeString();
-    const msg = `[${ts}] ` + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
-    debugEl.innerText += msg + "\n";
-    debugEl.scrollTop = debugEl.scrollHeight;
-    console.log('[健康生活助手]', ...args);
+  // 时区转换辅助函数：将ISO时间转换为本地时区的ISO格式显示
+  function toLocalISOString(isoString) {
+    try {
+      const date = new Date(isoString);
+      // 获取本地时区偏移量（分钟）
+      const offset = date.getTimezoneOffset();
+      // 创建本地时间的Date对象
+      const localDate = new Date(date.getTime() - offset * 60000);
+      // 转换为ISO格式，但保留本地时间值
+      return localDate.toISOString().slice(0, -1) + getTimezoneString();
+    } catch (e) {
+      return isoString; // 如果转换失败，返回原始值
+    }
+  }
+
+  // 获取时区字符串，如 +08:00 或 -07:00
+  function getTimezoneString() {
+    const offset = -new Date().getTimezoneOffset();
+    const hours = Math.floor(Math.abs(offset) / 60);
+    const minutes = Math.abs(offset) % 60;
+    const sign = offset >= 0 ? '+' : '-';
+    return `${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
   }
 
   async function findHealthWorldFile() {
     try {
       const moduleWI = await import('/scripts/world-info.js');
       const selected = moduleWI.selected_world_info || [];
-      debugLog('selected_world_info:', selected);
+      console.log('[健康生活助手] selected_world_info:', selected);
       for (const WI of selected) {
         if (WI.includes('健康生活助手')) {
-          debugLog('匹配到世界书文件:', WI);
+          toastr.info('匹配到世界书文件: ' + WI, '世界书');
           return WI;
         }
       }
-      debugLog('未找到名为 "健康生活助手" 的世界书文件');
+      toastr.warning('未找到名为 "健康生活助手" 的世界书文件', '世界书');
       return null;
     } catch (e) {
-      debugLog('findHealthWorldFile 异常:', e.message || e);
+      toastr.error('查找世界书文件异常: ' + (e.message || e), '错误');
       return null;
     }
   }
 
-  async function appendToWorldInfoExerciseLog(contentText) {
+  async function appendToWorldInfoExerciseLog(contentText, isoTime) {
     try {
       const fileId = await findHealthWorldFile();
-      if (!fileId) { debugLog('写入世界书: 未找到世界书文件，跳过写入'); return; }
+      if (!fileId) { 
+        toastr.warning('未找到世界书文件，跳过写入', '写入世界书'); 
+        return; 
+      }
 
       const moduleWI = await import('/scripts/world-info.js');
       const worldInfo = await moduleWI.loadWorldInfo(fileId);
       const entries = worldInfo.entries || {};
-      debugLog('loadWorldInfo entries count:', Object.keys(entries).length);
 
       let targetUID = null;
       for (const id in entries) {
@@ -3340,28 +5278,26 @@ async function showMental() {
         const comment = entry.comment || '';
         if (!entry.disable && (comment.includes('运动') || entry.title === '运动')) {
           targetUID = entry.uid;
-          debugLog('找到运动 entry: uid=', targetUID, 'comment=', comment);
           break;
         }
       }
 
       if (!targetUID) {
-        debugLog('未找到运动 entry（未创建），写入被跳过。');
+        toastr.warning('未找到运动 entry（未创建），写入被跳过', '世界书');
         return;
       }
 
-      const recLine = `${new Date().toLocaleString()}：${contentText}`;
+      const recLine = `运动记录 @ ${isoTime}：${contentText}`;
       const existing = entries[targetUID].content || '';
       const newContent = existing + (existing ? '\n' : '') + recLine;
 
-      debugLog('准备写入 world entry:', { file: fileId, uid: targetUID, newLine: recLine });
       await globalThis.SillyTavern.getContext()
         .SlashCommandParser.commands['setentryfield']
         .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
 
-      debugLog('写入世界书成功:', recLine);
+      toastr.success('已写入世界书: ' + recLine, '写入成功');
     } catch (e) {
-      debugLog('写入世界书失败:', e.message || e);
+      toastr.error('写入世界书失败: ' + (e.message || e), '错误');
     }
   }
 
@@ -3369,11 +5305,18 @@ async function showMental() {
     const txt = prompt('记录运动（例如：跑步 30 分钟 / 徒步 5km）：','');
     if (!txt) return;
     const now = new Date();
-    ctx.extensionSettings[MODULE_NAME].exercise.push({ text: txt, ts: now.toISOString() });
+    const isoTime = now.toISOString();
+    const localISOTime = toLocalISOString(isoTime);
+    const rec = {
+      text: txt,
+      ts: isoTime,
+      enabled: true
+    };
+    ctx.extensionSettings[MODULE_NAME].exercise.push(rec);
     saveSettings();
-    alert('运动已记录');
+    toastr.success(`运动已记录：\n${txt}\n本地时间：${localISOTime}`, '打卡成功');
     renderList();
-    appendToWorldInfoExerciseLog(txt);
+    appendToWorldInfoExerciseLog(txt, localISOTime);
   }
 
   document.getElementById('ha-exercise-log').addEventListener('click', recordExercise);
@@ -3386,14 +5329,17 @@ async function showMental() {
       const api = ctx.extensionSettings[MODULE_NAME].apiConfig || {};
       if (!api.url) {
         subPanel.innerText = '未配置独立 API，示例提示：保持每周适度运动，注意热身与拉伸。';
-        debugLog('运动分析: 未配置 API');
+        subPanel.scrollTop = subPanel.scrollHeight;
+        toastr.info('未配置 API，显示默认提示', '运动分析');
         return;
       }
 
       const endpoint = api.url.replace(/\/$/, '') + '/v1/chat/completions';
-      debugLog('运动分析调用: 请求将发送到', endpoint, 'model:', api.model);
+      toastr.info('正在请求运动分析...', 'API 调用');
 
-      const history = ctx.extensionSettings[MODULE_NAME].exercise.map(e => `${e.ts}：${e.text}`).join('\n');
+      const enabledExercises = (ctx.extensionSettings[MODULE_NAME].exercise || [])
+        .filter(e => e.enabled !== false);
+      const history = enabledExercises.map(e => `${e.ts}：${e.text}`).join('\n');
       const promptText = history || '用户未提供运动记录';
 
       const res = await fetch(endpoint, {
@@ -3412,20 +5358,464 @@ async function showMental() {
         })
       });
 
-      debugLog('运动分析调用: HTTP 状态', res.status);
       if (!res.ok) throw new Error('HTTP ' + res.status);
 
       const data = await res.json();
       const text = data.choices?.[0]?.message?.content || JSON.stringify(data);
       subPanel.innerText = text;
       subPanel.scrollTop = subPanel.scrollHeight;
-      debugLog('运动分析调用: 返回摘录', text.slice(0, 200));
+      toastr.success('运动分析已生成', 'API 调用成功');
     } catch (e) {
       subPanel.innerText = 'API 请求失败：' + (e.message || e);
       subPanel.scrollTop = subPanel.scrollHeight;
-      debugLog('运动分析调用失败:', e.message || e);
+      toastr.error('运动分析调用失败: ' + (e.message || e), 'API 错误');
     }
   });
+
+  // 运动记录管理按钮
+  document.getElementById('ha-exercise-records').addEventListener('click', () => {
+    openExerciseRecordsManager();
+  });
+
+  // 定期清除按钮
+  document.getElementById('ha-exercise-auto-clean').addEventListener('click', () => {
+    openAutoCleanPanel();
+  });
+
+  // 运动记录管理面板
+  function openExerciseRecordsManager() {
+    const panel = document.createElement('div');
+    panel.className = 'ha-sleep-records-overlay';
+    
+    panel.innerHTML = `
+      <div class="ha-sleep-records-panel">
+        <div class="ha-sleep-records-title">运动记录管理</div>
+        <div id="exercise-records-list" class="ha-sleep-records-list"></div>
+        <div class="ha-sleep-records-footer">
+          <button id="exercise-records-close" class="ha-btn">关闭</button>
+        </div>
+      </div>
+    `;
+    
+    container.appendChild(panel);
+    
+    // 渲染记录列表
+    renderRecordsList();
+    
+    function renderRecordsList() {
+      const listEl = panel.querySelector('#exercise-records-list');
+      const records = ctx.extensionSettings[MODULE_NAME].exercise || [];
+      
+      if (records.length === 0) {
+        listEl.innerHTML = '<div class="ha-sleep-records-empty">暂无运动记录</div>';
+        return;
+      }
+      
+      listEl.innerHTML = records.map((rec, index) => {
+        const enabledStatus = rec.enabled !== false;
+        const statusText = enabledStatus ? '已启用' : '未启用';
+        const statusClass = enabledStatus ? 'enabled' : 'disabled';
+        
+        // 将UTC的ISO时间转换为本地时区的ISO格式显示
+        const localISOTime = toLocalISOString(rec.ts);
+        
+        return `
+          <div class="ha-sleep-record-item">
+            <div class="ha-sleep-record-content">
+              <div class="ha-sleep-record-info">
+                <div class="ha-sleep-record-main">${rec.text}</div>
+                <div class="ha-sleep-record-time">本地时间: ${localISOTime}</div>
+                <div class="ha-sleep-record-status ${statusClass}">${statusText}</div>
+              </div>
+              <div class="ha-sleep-record-actions">
+                <button class="ha-btn ha-sleep-record-btn edit-record" data-index="${index}">
+                  编辑
+                </button>
+                <button class="ha-btn ha-sleep-record-btn toggle-record" data-index="${index}">
+                  ${enabledStatus ? '禁用' : '启用'}
+                </button>
+                <button class="ha-btn ha-sleep-record-btn delete" data-index="${index}">
+                  删除
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      // 绑定编辑按钮事件
+      listEl.querySelectorAll('.edit-record').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const index = parseInt(btn.getAttribute('data-index'));
+          editRecord(index);
+        });
+      });
+      
+      // 绑定删除按钮事件
+      listEl.querySelectorAll('.delete').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const index = parseInt(btn.getAttribute('data-index'));
+          await deleteRecord(index);
+          renderRecordsList();
+        });
+      });
+      
+      // 绑定启用/禁用按钮事件
+      listEl.querySelectorAll('.toggle-record').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const index = parseInt(btn.getAttribute('data-index'));
+          await toggleRecord(index);
+          renderRecordsList();
+        });
+      });
+    }
+
+    // 编辑记录
+    function editRecord(index) {
+      const records = ctx.extensionSettings[MODULE_NAME].exercise || [];
+      const record = records[index];
+      
+      if (!record) {
+        toastr.warning('记录不存在', '编辑失败');
+        return;
+      }
+
+      const editDialog = document.createElement('div');
+      editDialog.className = 'ha-manual-time-overlay';
+      
+      // 将UTC时间转换为本地时间用于编辑
+      const existingDate = new Date(record.ts);
+      // 使用本地时间的年月日和时分
+      const year = existingDate.getFullYear();
+      const month = String(existingDate.getMonth() + 1).padStart(2, '0');
+      const day = String(existingDate.getDate()).padStart(2, '0');
+      const hours = String(existingDate.getHours()).padStart(2, '0');
+      const minutes = String(existingDate.getMinutes()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      const timeStr = `${hours}:${minutes}`;
+      
+      editDialog.innerHTML = `
+        <div class="ha-manual-time-panel">
+          <div class="ha-manual-time-title">编辑运动记录</div>
+          <label class="ha-manual-time-label">运动内容:</label><br>
+          <input id="edit-exercise-text" type="text" class="ha-manual-time-input" value="${record.text}" style="width:100%;margin-bottom:10px;"><br>
+          <label class="ha-manual-time-label">日期 (本地时区):</label><br>
+          <input id="edit-exercise-date" type="date" class="ha-manual-time-input" value="${dateStr}"><br>
+          <label class="ha-manual-time-label">时间 (本地时区):</label><br>
+          <input id="edit-exercise-time" type="time" class="ha-manual-time-input" value="${timeStr}"><br>
+          <div class="ha-manual-time-footer">
+            <button id="edit-exercise-ok" class="ha-btn">保存</button>
+            <button id="edit-exercise-cancel" class="ha-btn" style="margin-left:6px;">取消</button>
+          </div>
+        </div>
+      `;
+      
+      container.appendChild(editDialog);
+      
+      editDialog.querySelector('#edit-exercise-cancel').onclick = () => editDialog.remove();
+      editDialog.querySelector('#edit-exercise-ok').onclick = async () => {
+        const newText = editDialog.querySelector('#edit-exercise-text').value.trim();
+        const date = editDialog.querySelector('#edit-exercise-date').value;
+        const time = editDialog.querySelector('#edit-exercise-time').value;
+        
+        if (!newText) {
+          toastr.warning('请输入运动内容', '输入不完整');
+          return;
+        }
+        
+        if (!date || !time) {
+          toastr.warning('请选择完整的日期和时间', '输入不完整');
+          return;
+        }
+        
+        // 创建本地时间的Date对象，然后转换为UTC的ISO格式
+        const selectedDateTime = new Date(`${date}T${time}`);
+        
+        if (isNaN(selectedDateTime.getTime())) {
+          toastr.error('无效的日期时间', '错误');
+          return;
+        }
+        
+        // 更新记录 - 存储UTC时间
+        record.text = newText;
+        record.ts = selectedDateTime.toISOString();
+        saveSettings();
+        
+        // 同步到世界书
+        await syncToWorldInfo();
+        
+        const localISOTime = toLocalISOString(record.ts);
+        toastr.success(`运动记录已更新\n本地时间：${localISOTime}`, '编辑成功');
+        renderRecordsList();
+        renderList();
+        editDialog.remove();
+      };
+    }
+    
+    // 删除记录（同时从localStorage和世界书删除）
+    async function deleteRecord(index) {
+      const records = ctx.extensionSettings[MODULE_NAME].exercise || [];
+      const record = records[index];
+      
+      if (!record) {
+        toastr.warning('记录不存在', '删除失败');
+        return;
+      }
+      
+      // 从localStorage删除
+      records.splice(index, 1);
+      saveSettings();
+      
+      // 从世界书删除
+      await syncToWorldInfo();
+      
+      toastr.success('记录已删除', '删除成功');
+      renderList();
+    }
+    
+    // 切换启用状态
+    async function toggleRecord(index) {
+      const records = ctx.extensionSettings[MODULE_NAME].exercise || [];
+      const record = records[index];
+      
+      if (!record) {
+        toastr.warning('记录不存在', '操作失败');
+        return;
+      }
+      
+      // 切换启用状态
+      record.enabled = !(record.enabled !== false);
+      saveSettings();
+      
+      // 同步到世界书
+      await syncToWorldInfo();
+      
+      const statusText = record.enabled ? '已启用' : '已禁用';
+      toastr.success(`记录${statusText}`, '操作成功');
+      renderList();
+    }
+    
+    // 同步所有启用的记录到世界书
+    async function syncToWorldInfo() {
+      try {
+        const fileId = await findHealthWorldFile();
+        if (!fileId) return;
+        
+        const moduleWI = await import('/scripts/world-info.js');
+        const worldInfo = await moduleWI.loadWorldInfo(fileId);
+        const entries = worldInfo.entries || {};
+        
+        let targetUID = null;
+        for (const id in entries) {
+          const entry = entries[id];
+          const comment = entry.comment || '';
+          if (!entry.disable && (comment.includes('运动') || entry.title === '运动')) {
+            targetUID = entry.uid;
+            break;
+          }
+        }
+        
+        if (!targetUID) {
+          toastr.warning('未找到运动条目', '同步失败');
+          return;
+        }
+        
+        // 只包含启用的记录
+        const records = ctx.extensionSettings[MODULE_NAME].exercise || [];
+        const enabledRecords = records.filter(rec => rec.enabled !== false);
+        
+        const newContent = enabledRecords.map(rec => {
+          // 将UTC时间转换为本地时区ISO格式
+          const localISOTime = toLocalISOString(rec.ts);
+          return `运动记录 @ ${localISOTime}：${rec.text}`;
+        }).join('\n');
+        
+        await globalThis.SillyTavern.getContext()
+          .SlashCommandParser.commands['setentryfield']
+          .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+        
+      } catch (e) {
+        console.error('同步到世界书失败:', e);
+      }
+    }
+    
+    panel.querySelector('#exercise-records-close').onclick = () => panel.remove();
+  }
+
+  // 定期清除面板
+  function openAutoCleanPanel() {
+    const panel = document.createElement('div');
+    panel.className = 'ha-sleep-records-overlay';
+    
+    // 读取当前配置
+    const config = ctx.extensionSettings[MODULE_NAME].exerciseAutoClean || {
+      days: 30,
+      cleanLocalStorage: false,
+      cleanWorldBook: false
+    };
+    
+    panel.innerHTML = `
+      <div class="ha-sleep-records-panel" style="max-width: 400px;">
+        <div class="ha-sleep-records-title">定期清除设置</div>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px;">清除天数（保留最近N天）:</label>
+          <input type="number" id="auto-clean-days" value="${config.days}" min="1" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+          <div style="font-size: 11px; color: #666; margin-top: 2px;">例如: 输入30表示保留最近30天的记录</div>
+        </div>
+        <div style="margin-bottom: 12px;">
+          <button id="auto-clean-localstorage" class="ha-btn" style="width: 100%; margin-bottom: 6px; ${config.cleanLocalStorage ? 'background: #f44336; color: #fff;' : ''}">
+            ${config.cleanLocalStorage ? '✓ ' : ''}清除 localStorage
+          </button>
+          <button id="auto-clean-worldbook" class="ha-btn" style="width: 100%; ${config.cleanWorldBook ? 'background: #f44336; color: #fff;' : ''}">
+            ${config.cleanWorldBook ? '✓ ' : ''}清除世界书
+          </button>
+        </div>
+        <div style="font-size: 12px; color: #666; padding: 8px; background: #f9f9f9; border-radius: 4px; margin-bottom: 12px;">
+          <strong>说明:</strong> 每天04:00自动清除过期记录。如果04:00时浏览器未打开，则在扩展下次启动时执行清除。
+        </div>
+        <div class="ha-sleep-records-footer">
+          <button id="auto-clean-save" class="ha-btn" style="background: #4CAF50; color: #fff;">保存设置</button>
+          <button id="auto-clean-close" class="ha-btn" style="margin-left: 6px;">关闭</button>
+        </div>
+      </div>
+    `;
+    
+    container.appendChild(panel);
+    
+    let cleanLocalStorage = config.cleanLocalStorage;
+    let cleanWorldBook = config.cleanWorldBook;
+    
+    // 切换 localStorage 清除
+    panel.querySelector('#auto-clean-localstorage').addEventListener('click', (e) => {
+      cleanLocalStorage = !cleanLocalStorage;
+      const btn = e.target;
+      if (cleanLocalStorage) {
+        btn.style.background = '#f44336';
+        btn.style.color = '#fff';
+        btn.textContent = '✓ 清除 localStorage';
+      } else {
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.textContent = '清除 localStorage';
+      }
+    });
+    
+    // 切换世界书清除
+    panel.querySelector('#auto-clean-worldbook').addEventListener('click', (e) => {
+      cleanWorldBook = !cleanWorldBook;
+      const btn = e.target;
+      if (cleanWorldBook) {
+        btn.style.background = '#f44336';
+        btn.style.color = '#fff';
+        btn.textContent = '✓ 清除世界书';
+      } else {
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.textContent = '清除世界书';
+      }
+    });
+    
+    // 保存设置
+    panel.querySelector('#auto-clean-save').addEventListener('click', () => {
+      const days = parseInt(panel.querySelector('#auto-clean-days').value);
+      if (isNaN(days) || days < 1) {
+        toastr.warning('请输入有效的天数（至少为1）', '输入错误');
+        return;
+      }
+      
+      ctx.extensionSettings[MODULE_NAME].exerciseAutoClean = {
+        days,
+        cleanLocalStorage,
+        cleanWorldBook,
+        lastCleanDate: ctx.extensionSettings[MODULE_NAME].exerciseAutoClean?.lastCleanDate || null
+      };
+      saveSettings();
+      toastr.success('定期清除设置已保存', '保存成功');
+      panel.remove();
+    });
+    
+    panel.querySelector('#auto-clean-close').onclick = () => panel.remove();
+  }
+
+  // 执行定期清除（从指定日期之前的记录）
+  async function performAutoClean(daysToKeep) {
+    const config = ctx.extensionSettings[MODULE_NAME].exerciseAutoClean;
+    if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+      return; // 未配置或都未启用
+    }
+    
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+    
+    // 解析ISO日期字符串获取日期部分
+    function parseISODate(isoString) {
+      const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!match) return null;
+      return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+    }
+    
+    const records = ctx.extensionSettings[MODULE_NAME].exercise || [];
+    
+    // 清除 localStorage
+    if (config.cleanLocalStorage) {
+      const filteredRecords = records.filter(rec => {
+        const recDate = parseISODate(rec.ts);
+        return recDate && recDate >= cutoffDate;
+      });
+      
+      const removedCount = records.length - filteredRecords.length;
+      if (removedCount > 0) {
+        ctx.extensionSettings[MODULE_NAME].exercise = filteredRecords;
+        saveSettings();
+        console.log(`[健康生活助手] 自动清除: 从 localStorage 删除了 ${removedCount} 条运动记录`);
+      }
+    }
+    
+    // 清除世界书
+    if (config.cleanWorldBook) {
+      try {
+        const fileId = await findHealthWorldFile();
+        if (!fileId) return;
+        
+        const moduleWI = await import('/scripts/world-info.js');
+        const worldInfo = await moduleWI.loadWorldInfo(fileId);
+        const entries = worldInfo.entries || {};
+        
+        let targetUID = null;
+        for (const id in entries) {
+          const entry = entries[id];
+          const comment = entry.comment || '';
+          if (!entry.disable && (comment.includes('运动') || entry.title === '运动')) {
+            targetUID = entry.uid;
+            break;
+          }
+        }
+        
+        if (!targetUID) return;
+        
+        // 获取当前启用的记录（已经是过滤后的）
+        const currentRecords = ctx.extensionSettings[MODULE_NAME].exercise || [];
+        const enabledRecords = currentRecords.filter(rec => rec.enabled !== false);
+        
+        const newContent = enabledRecords.map(rec => {
+          const localISOTime = toLocalISOString(rec.ts);
+          return `运动记录 @ ${localISOTime}：${rec.text}`;
+        }).join('\n');
+        
+        await globalThis.SillyTavern.getContext()
+          .SlashCommandParser.commands['setentryfield']
+          .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+        
+        console.log('[健康生活助手] 自动清除: 已同步世界书');
+      } catch (e) {
+        console.error('[健康生活助手] 自动清除世界书失败:', e);
+      }
+    }
+    
+    // 更新最后清除日期
+    config.lastCleanDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    saveSettings();
+  }
 
   function renderList() {
     const arr = ctx.extensionSettings[MODULE_NAME].exercise || [];
@@ -3433,8 +5823,42 @@ async function showMental() {
   }
 
   renderList();
+  
+  
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 async function showFinance() {
+  // 辅助函数：生成带时区偏移的 ISO 格式时间
+  function getISOWithOffset() {
+    const now = new Date();
+    const offset = -now.getTimezoneOffset();
+    const offsetHours = Math.floor(Math.abs(offset) / 60).toString().padStart(2, '0');
+    const offsetMinutes = (Math.abs(offset) % 60).toString().padStart(2, '0');
+    const offsetSign = offset >= 0 ? '+' : '-';
+    return now.getFullYear() + '-' +
+      (now.getMonth() + 1).toString().padStart(2, '0') + '-' +
+      now.getDate().toString().padStart(2, '0') + 'T' +
+      now.getHours().toString().padStart(2, '0') + ':' +
+      now.getMinutes().toString().padStart(2, '0') + ':' +
+      now.getSeconds().toString().padStart(2, '0') + '.' +
+      now.getMilliseconds().toString().padStart(3, '0') +
+      offsetSign + offsetHours + ':' + offsetMinutes;
+  }
+
+
+
   const container = content;
   container.style.display = 'block';
   container.innerHTML = `
@@ -3541,10 +5965,10 @@ async function showFinance() {
 
       const all = ctx.extensionSettings[MODULE_NAME].finance.records || [];
       const incomeList = all.filter(r => r.type === 'income').map((r,i)=>
-        `${i+1}. ${new Date(r.date).toLocaleString()} ${r.tag}${r.name?`(${r.name})`:''}：${r.value}元`
+        `${i+1}. ${r.date} ${r.tag}${r.name?`(${r.name})`:''}：${r.value}元`
       );
       const expenseList = all.filter(r => r.type === 'expense').map((r,i)=>
-        `${i+1}. ${new Date(r.date).toLocaleString()} ${r.tag}${r.name?`(${r.name})`:''}：${r.value}元`
+        `${i+1}. ${r.date} ${r.tag}${r.name?`(${r.name})`:''}：${r.value}元`
       );
 
       const ctxObj = globalThis.SillyTavern.getContext();
@@ -3580,7 +6004,8 @@ async function showFinance() {
             const name = prompt('输入名称（可留空）', '');
             const value = prompt('输入金额（元）', '');
             if (!value || isNaN(parseFloat(value))) return toastr.warning('金额无效');
-            const rec = { type, tag, name: name || '', value: parseFloat(value), date: new Date().toISOString() };
+            // 生成带时区偏移的 ISO 格式时间
+            const rec = { type, tag, name: name || '', value: parseFloat(value), date: getISOWithOffset() };
             finance.records.push(rec);
             saveSettings();
             await appendToWorldInfoFinance();
@@ -3596,7 +6021,11 @@ async function showFinance() {
   }
 
   function updateSummary() {
-    const monthRecords = finance.records.filter(r => r.date.startsWith(ym));
+    // 提取日期字符串的年月部分（兼容带时区偏移的 ISO 格式）
+    const monthRecords = finance.records.filter(r => {
+      const dateStr = r.date.substring(0, 7); // 提取 YYYY-MM 部分
+      return dateStr === ym;
+    });
     const totalIncome = monthRecords.filter(r => r.type === 'income').reduce((a, b) => a + b.value, 0);
     const totalExpense = monthRecords.filter(r => r.type === 'expense').reduce((a, b) => a + b.value, 0);
     totalIncomeEl.textContent = totalIncome.toFixed(2);
@@ -3636,14 +6065,14 @@ async function showFinance() {
 
   // 分析
   document.getElementById('ha-income-analysis').addEventListener('click', () => {
-    const monthRecords = finance.records.filter(r => r.type === 'income' && r.date.startsWith(ym));
+    const monthRecords = finance.records.filter(r => r.type === 'income' && r.date.substring(0, 7) === ym);
     const byTag = {};
     monthRecords.forEach(r => (byTag[r.tag] = (byTag[r.tag] || 0) + r.value));
     const sorted = Object.entries(byTag).sort((a, b) => b[1] - a[1]);
     resultEl.innerText = '当月收入分析：\n' + sorted.map(([t, v]) => `${t}: ${v.toFixed(2)}元`).join('\n');
   });
   document.getElementById('ha-expense-analysis').addEventListener('click', () => {
-    const monthRecords = finance.records.filter(r => r.type === 'expense' && r.date.startsWith(ym));
+    const monthRecords = finance.records.filter(r => r.type === 'expense' && r.date.substring(0, 7) === ym);
     const byTag = {};
     monthRecords.forEach(r => (byTag[r.tag] = (byTag[r.tag] || 0) + r.value));
     const sorted = Object.entries(byTag).sort((a, b) => b[1] - a[1]);
@@ -3662,7 +6091,7 @@ async function showFinance() {
       const div = document.createElement('div');
       div.style.cssText = 'border-bottom:1px solid #ddd;padding:4px 0;display:flex;justify-content:space-between;align-items:center;';
       const text = document.createElement('span');
-      text.textContent = `${new Date(r.date).toLocaleString()} [${r.type === 'income' ? '收入' : '支出'}] ${r.tag}${r.name ? `(${r.name})` : ''}：${r.value}元`;
+      text.textContent = `${r.date} [${r.type === 'income' ? '收入' : '支出'}] ${r.tag}${r.name ? `(${r.name})` : ''}：${r.value}元`;
       const tools = document.createElement('div');
       const edit = document.createElement('button');
       edit.textContent = '✏️';
@@ -3700,6 +6129,23 @@ async function showFinance() {
   renderTags();
   updateSummary();
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
      async function showWishes() {
   content.style.display = 'block';
@@ -4497,60 +6943,97 @@ async function scheduleNotification(todo) {
   
   render();
 }
+
+
+
+
+
+
+
+
+
+
+
+
 async function showMemo() {
   if (!ctx.extensionSettings[MODULE_NAME].memo) ctx.extensionSettings[MODULE_NAME].memo = [];
   const memos = ctx.extensionSettings[MODULE_NAME].memo;
+
+ 
+    
 
   content.innerHTML = `
     <div style="font-weight:600;margin-bottom:6px">备忘录</div>
     <div style="margin-bottom:6px;">
       <textarea id="ha-memo-input" placeholder="输入备忘录..." 
         style="width:100%; min-height:60px; padding:4px; resize:vertical"></textarea>
-      <button id="ha-memo-add" class="ha-btn" style="vertical-align:top; margin-left:6px;">添加 Memo</button>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button id="ha-memo-add" class="ha-btn" style="flex:1;">添加 Memo</button>
+        <button id="ha-memo-auto-clean" class="ha-btn">定期清除</button>
+      </div>
     </div>
     <ul id="ha-memo-list" style="padding-left:18px; margin-top:6px;"></ul>
-    <div id="ha-memo-debug" style="margin-top:8px;padding:6px;border:1px solid #ddd;font-size:12px;max-height:160px;overflow:auto;background:#fafafa;white-space:pre-wrap"></div>
   `;
 
   const listEl = document.getElementById('ha-memo-list');
-  const debugEl = document.getElementById('ha-memo-debug');
 
-  function debugLog(...args) {
-    const ts = new Date().toLocaleTimeString();
-    const msg = `[${ts}] ` + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
-    debugEl.innerText += msg + "\n";
-    debugEl.scrollTop = debugEl.scrollHeight;
-    console.log('[健康生活助手][Memo]', ...args);
+  // 获取带时区偏移的ISO格式时间字符串
+  function getISOWithOffset() {
+    const now = new Date();
+    const offset = -now.getTimezoneOffset();
+    const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
+    const offsetMinutes = String(Math.abs(offset) % 60).padStart(2, '0');
+    const offsetSign = offset >= 0 ? '+' : '-';
+    
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const ms = String(now.getMilliseconds()).padStart(3, '0');
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}${offsetSign}${offsetHours}:${offsetMinutes}`;
+  }
+
+  function showToast(message, type = 'info') {
+    if (window.toastr) {
+      toastr[type](message, '备忘录', { timeOut: 3000 });
+    }
+    console.log('[健康生活助手][Memo]', message);
   }
 
   async function findHealthWorldFile() {
     try {
       const moduleWI = await import('/scripts/world-info.js');
       const selected = moduleWI.selected_world_info || [];
-      debugLog('selected_world_info:', selected);
+      console.log('[健康生活助手][Memo] selected_world_info:', selected);
       for (const WI of selected) {
         if (WI.includes('健康生活助手')) {
-          debugLog('匹配到世界书文件:', WI);
+          console.log('[健康生活助手][Memo] 匹配到世界书文件:', WI);
           return WI;
         }
       }
-      debugLog('未找到名为 "健康生活助手" 的世界书文件');
+      showToast('未找到名为 "健康生活助手" 的世界书文件', 'warning');
       return null;
     } catch (e) {
-      debugLog('findHealthWorldFile 异常:', e.message || e);
+      showToast('查找世界书文件失败: ' + (e.message || e), 'error');
       return null;
     }
   }
 
-  async function appendToWorldInfoMemo() {
+  async function appendToWorldInfoMemo(silent = false) {
     try {
       const fileId = await findHealthWorldFile();
-      if (!fileId) { debugLog('写入世界书: 未找到世界书文件，跳过写入'); return; }
+      if (!fileId) { 
+        console.log('[健康生活助手][Memo] 写入世界书: 未找到世界书文件，跳过写入');
+        return;
+      }
 
       const moduleWI = await import('/scripts/world-info.js');
       const worldInfo = await moduleWI.loadWorldInfo(fileId);
       const entries = worldInfo.entries || {};
-      debugLog('loadWorldInfo entries count:', Object.keys(entries).length);
+      console.log('[健康生活助手][Memo] loadWorldInfo entries count:', Object.keys(entries).length);
 
       let targetUID = null;
       for (const id in entries) {
@@ -4558,30 +7041,33 @@ async function showMemo() {
         const comment = entry.comment || '';
         if (!entry.disable && (comment.includes('memo') || entry.title === 'memo')) {
           targetUID = entry.uid;
-          debugLog('找到 memo entry: uid=', targetUID, 'comment=', comment);
+          console.log('[健康生活助手][Memo] 找到 memo entry: uid=', targetUID, 'comment=', comment);
           break;
         }
       }
 
-      if (!targetUID) { debugLog('未找到 memo entry（未创建），写入被跳过。'); return; }
+      if (!targetUID) { 
+        if (!silent) showToast('未找到 memo entry（未创建），写入被跳过', 'warning');
+        return;
+      }
 
       // 仅同步共享的 memo
       const shared = memos.filter(m => m.shared);
-      const arr = shared.map((m, i) => `${i+1}. [${m.date}] ${m.text}`);
+      const arr = shared.map((m, i) => `${i+1}. ${m.date} ${m.text}`);
       const newContent = arr.join('\n');
 
-      debugLog('准备写入 world entry:', { file: fileId, uid: targetUID });
+      console.log('[健康生活助手][Memo] 准备写入 world entry:', { file: fileId, uid: targetUID });
       await globalThis.SillyTavern.getContext()
         .SlashCommandParser.commands['setentryfield']
         .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
 
-      debugLog('写入世界书成功，共享条目数:', arr.length);
+      if (!silent) showToast(`写入世界书成功，共享条目数: ${arr.length}`, 'success');
     } catch (e) {
-      debugLog('写入世界书失败:', e.message || e);
+      if (!silent) showToast('写入世界书失败: ' + (e.message || e), 'error');
     }
   }
 
-  function render() {
+  function render(userAction = false) {
     listEl.innerHTML = '';
     memos.forEach((m, i) => {
       const li = document.createElement('li');
@@ -4597,13 +7083,13 @@ async function showMemo() {
       chkShare.addEventListener('change', () => {
         m.shared = chkShare.checked;
         saveSettings();
-        appendToWorldInfoMemo();
+        appendToWorldInfoMemo(false); // 用户操作，显示通知
       });
       li.appendChild(chkShare);
 
       const span = document.createElement('span');
       span.style.flex = '1';
-      span.innerText = `${i+1}. [${m.date}] ${m.text}`;
+      span.innerText = `${i+1}. ${m.date} ${m.text}`;
       li.appendChild(span);
 
       // 编辑按钮
@@ -4615,9 +7101,11 @@ async function showMemo() {
         const newText = prompt('编辑 Memo 内容', m.text);
         if (newText === null) return;
         m.text = newText;
+        m.date = getISOWithOffset(); // 更新编辑时间为带时区偏移的ISO格式
         saveSettings();
-        render();
-        appendToWorldInfoMemo();
+        render(true);
+        appendToWorldInfoMemo(false); // 用户操作，显示通知
+        showToast('备忘录已更新', 'success');
       });
       li.appendChild(btnEdit);
 
@@ -4630,15 +7118,19 @@ async function showMemo() {
         if (!confirm('确认删除该 Memo？')) return;
         memos.splice(i, 1);
         saveSettings();
-        render();
-        appendToWorldInfoMemo();
+        render(true);
+        appendToWorldInfoMemo(false); // 用户操作，显示通知
+        showToast('备忘录已删除', 'info');
       });
       li.appendChild(btnDel);
 
       listEl.appendChild(li);
     });
 
-    appendToWorldInfoMemo();
+    // 初始渲染时静默同步，用户操作时不重复调用（已在各操作中调用）
+    if (!userAction) {
+      appendToWorldInfoMemo(true);
+    }
   }
 
   // 添加 Memo
@@ -4646,21 +7138,213 @@ async function showMemo() {
     const input = content.querySelector('#ha-memo-input');
     const val = input.value.trim();
     if (!val) return;
-    const now = new Date();
-    const dateStr = now.toLocaleString();
+    const dateStr = getISOWithOffset();
     memos.push({ text: val, date: dateStr, shared: false });
     input.value = '';
     saveSettings();
-    render();
+    render(true);
+    showToast('备忘录已添加', 'success');
   });
 
-  render();
+  // 定期清除按钮
+  document.getElementById('ha-memo-auto-clean').addEventListener('click', () => {
+    openAutoCleanPanel();
+  });
+
+  // 定期清除面板
+  function openAutoCleanPanel() {
+    const panel = document.createElement('div');
+    panel.style.position = 'absolute';
+    panel.style.top = '0';
+    panel.style.left = '0';
+    panel.style.width = '100%';
+    panel.style.height = '100%';
+    panel.style.background = 'rgba(0,0,0,0.5)';
+    panel.style.display = 'flex';
+    panel.style.alignItems = 'center';
+    panel.style.justifyContent = 'center';
+    panel.style.zIndex = '10000';
+    
+    // 读取当前配置
+    const config = ctx.extensionSettings[MODULE_NAME].memoAutoClean || {
+      days: 30,
+      cleanLocalStorage: false,
+      cleanWorldBook: false
+    };
+    
+    const innerPanel = document.createElement('div');
+    innerPanel.style.background = '#fff';
+    innerPanel.style.padding = '20px';
+    innerPanel.style.borderRadius = '8px';
+    innerPanel.style.maxWidth = '400px';
+    innerPanel.style.width = '90%';
+    innerPanel.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+    
+    innerPanel.innerHTML = `
+      <div style="font-weight: 600; font-size: 16px; margin-bottom: 16px;">定期清除设置</div>
+      <div style="margin-bottom: 12px;">
+        <label style="display: block; margin-bottom: 4px; font-size: 13px;">清除天数（保留最近N天）:</label>
+        <input type="number" id="memo-auto-clean-days" value="${config.days}" min="1" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+        <div style="font-size: 11px; color: #666; margin-top: 2px;">例如: 输入30表示保留最近30天的记录</div>
+      </div>
+      <div style="margin-bottom: 12px;">
+        <button id="memo-auto-clean-localstorage" class="ha-btn" style="width: 100%; margin-bottom: 6px; ${config.cleanLocalStorage ? 'background: #f44336; color: #fff;' : ''}">
+          ${config.cleanLocalStorage ? '✓ ' : ''}清除 localStorage
+        </button>
+        <button id="memo-auto-clean-worldbook" class="ha-btn" style="width: 100%; ${config.cleanWorldBook ? 'background: #f44336; color: #fff;' : ''}">
+          ${config.cleanWorldBook ? '✓ ' : ''}清除世界书
+        </button>
+      </div>
+      <div style="font-size: 12px; color: #666; padding: 8px; background: #f9f9f9; border-radius: 4px; margin-bottom: 12px;">
+        <strong>说明:</strong> 每天04:00自动清除过期记录。如果04:00时浏览器未打开，则在扩展下次启动时执行清除。
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button id="memo-auto-clean-save" class="ha-btn" style="flex: 1; background: #4CAF50; color: #fff;">保存设置</button>
+        <button id="memo-auto-clean-close" class="ha-btn" style="flex: 1;">关闭</button>
+      </div>
+    `;
+    
+    panel.appendChild(innerPanel);
+    content.appendChild(panel);
+    
+    let cleanLocalStorage = config.cleanLocalStorage;
+    let cleanWorldBook = config.cleanWorldBook;
+    
+    // 切换 localStorage 清除
+    innerPanel.querySelector('#memo-auto-clean-localstorage').addEventListener('click', (e) => {
+      cleanLocalStorage = !cleanLocalStorage;
+      const btn = e.target;
+      if (cleanLocalStorage) {
+        btn.style.background = '#f44336';
+        btn.style.color = '#fff';
+        btn.textContent = '✓ 清除 localStorage';
+      } else {
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.textContent = '清除 localStorage';
+      }
+    });
+    
+    // 切换世界书清除
+    innerPanel.querySelector('#memo-auto-clean-worldbook').addEventListener('click', (e) => {
+      cleanWorldBook = !cleanWorldBook;
+      const btn = e.target;
+      if (cleanWorldBook) {
+        btn.style.background = '#f44336';
+        btn.style.color = '#fff';
+        btn.textContent = '✓ 清除世界书';
+      } else {
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.textContent = '清除世界书';
+      }
+    });
+    
+    // 保存设置
+    innerPanel.querySelector('#memo-auto-clean-save').addEventListener('click', () => {
+      const days = parseInt(innerPanel.querySelector('#memo-auto-clean-days').value);
+      if (isNaN(days) || days < 1) {
+        showToast('请输入有效的天数（至少为1）', 'warning');
+        return;
+      }
+      
+      ctx.extensionSettings[MODULE_NAME].memoAutoClean = {
+        days,
+        cleanLocalStorage,
+        cleanWorldBook,
+        lastCleanDate: ctx.extensionSettings[MODULE_NAME].memoAutoClean?.lastCleanDate || null
+      };
+      saveSettings();
+      showToast('定期清除设置已保存', 'success');
+      panel.remove();
+    });
+    
+    innerPanel.querySelector('#memo-auto-clean-close').onclick = () => panel.remove();
+  }
+
+  // 执行定期清除（从指定日期之前的记录）
+  async function performAutoClean(daysToKeep) {
+    const config = ctx.extensionSettings[MODULE_NAME].memoAutoClean;
+    if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+      return; // 未配置或都未启用
+    }
+    
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+    
+    // 解析ISO日期字符串获取日期部分
+    function parseISODate(isoString) {
+      const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!match) return null;
+      return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+    }
+    
+    // 清除 localStorage
+    if (config.cleanLocalStorage) {
+      const filteredMemos = memos.filter(m => {
+        const memoDate = parseISODate(m.date);
+        return memoDate && memoDate >= cutoffDate;
+      });
+      
+      const removedCount = memos.length - filteredMemos.length;
+      if (removedCount > 0) {
+        ctx.extensionSettings[MODULE_NAME].memo = filteredMemos;
+        saveSettings();
+        console.log(`[健康生活助手][Memo] 自动清除: 从 localStorage 删除了 ${removedCount} 条备忘录`);
+      }
+    }
+    
+    // 清除世界书
+    if (config.cleanWorldBook) {
+      try {
+        const fileId = await findHealthWorldFile();
+        if (!fileId) return;
+        
+        const moduleWI = await import('/scripts/world-info.js');
+        const worldInfo = await moduleWI.loadWorldInfo(fileId);
+        const entries = worldInfo.entries || {};
+        
+        let targetUID = null;
+        for (const id in entries) {
+          const entry = entries[id];
+          const comment = entry.comment || '';
+          if (!entry.disable && (comment.includes('memo') || entry.title === 'memo')) {
+            targetUID = entry.uid;
+            break;
+          }
+        }
+        
+        if (!targetUID) return;
+        
+        // 获取当前的备忘录（已经是过滤后的）
+        const currentMemos = ctx.extensionSettings[MODULE_NAME].memo || [];
+        const shared = currentMemos.filter(m => m.shared);
+        const arr = shared.map((m, i) => `${i+1}. ${m.date} ${m.text}`);
+        const newContent = arr.join('\n');
+        
+        await globalThis.SillyTavern.getContext()
+          .SlashCommandParser.commands['setentryfield']
+          .callback({ file: fileId, uid: targetUID, field: 'content' }, newContent);
+        
+        console.log('[健康生活助手][Memo] 自动清除: 已同步世界书');
+      } catch (e) {
+        console.error('[健康生活助手][Memo] 自动清除世界书失败:', e);
+      }
+    }
+    
+    // 更新最后清除日期
+    config.lastCleanDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    saveSettings();
+  }
+
+  render(false); // 初始渲染，不显示通知
+  
+  
 }
 
 
 
 
-// 🎵 最终完整解决方案 - 可直接替换使用
 
 
 
@@ -4673,55 +7357,12 @@ async function showMemo() {
 
 
 
-// ==================== 使用说明 ====================
-
-/**
- * 使用方法:
- * 
- * 1. 完整替换你的 playSong() 函数
- * 2. 确保 getMusicUrl() 函数已经是改进版(双平台支持)
- * 3. 确保页面有 id="ha-music-lyrics" 的歌词容器
- * 4. 确保 toaster() 函数可用
- * 
- * 核心改进:
- * ✅ 歌词先加载并立即显示
- * ✅ "正在搜索音源"提示追加在底部(不覆盖歌词)
- * ✅ 音源加载完成后自动移除提示
- * ✅ 错误信息也追加在底部
- * ✅ 所有状态提示都使用 appendChild,不用 textContent
- * 
- * 测试建议:
- * 1. 测试有歌词的歌曲
- * 2. 测试无歌词的歌曲
- * 3. 测试找不到音源的情况
- * 4. 测试网络异常情况
- */
-
-
-// 🎵 修复点击冲突的版本
-
-// 问题分析：
-// 1. 播放器的外层 popup 有全屏半透明背景 (width: 100%, height: 100%)
-// 2. 这个背景层的 z-index: 99998
-// 3. 悬浮栏的 z-index: 99999
-// 4. 当播放器隐藏时(display: none)，背景层也隐藏了
-// 5. 但点击悬浮栏时，会先显示播放器(包括背景层)
-// 6. 背景层立即覆盖了悬浮栏，导致无法继续交互
 
 
 
 
 
 
-// 🎵 重构版 showBgm - 使用全局单例模式管理播放器和悬浮栏
-
-// 🎵 完整的 showBgm 函数 - 包含悬浮栏功能
-
-// 🎵 修复后的完整 showBgm 函数
-// 修复内容:
-// 1. 播放器位置改为 left:10px; top:50px;
-// 2. 悬浮栏宽度280px + 位置记忆
-// 3. 点击🎵返回播放器不会重新播放(保持播放状态)
 
 async function showBgm() {
   const container = content;
@@ -4849,7 +7490,7 @@ async function showBgm() {
       if (!kw) {
         prompt = `请推荐${limit}首符合这些标签的歌曲（格式"歌名 - 歌手"）,每行一条，不要输出歌手和歌名以外的内容。排除以下音乐。\n标签：${enabledTags.join('、')}\n排除：${skipList.join('、')}`;
       } else {
-        prompt = `请推荐${limit}首与"${kw}"相关的歌曲，格式为"歌名 - 歌手"。不要输出歌手和歌名以外的内容例如推荐语。`;
+        prompt = `请推荐${limit}首与"${kw}"相关的歌曲，"${kw}"中可能是歌名或歌手，格式为"歌名 - 歌手"。不要输出歌手和歌名以外的内容例如推荐语。`;
       }
 
       const res = await fetch(endpoint, {
@@ -4894,14 +7535,11 @@ async function showBgm() {
   let Lyrics_Data = [];
   let Current_Lyric_Index = -1;
   let Float_Bar_Active = false;
-  
-  // 🔧 新增: 当前播放状态(用于恢复播放器)
-  let Current_Playing_Song = null; // { name, artist }
+  let Current_Playing_Song = null;
   let Is_Currently_Playing = false;
 
-  // ==================== 悬浮栏功能 (改进版) ====================
+  // ==================== 悬浮栏功能 ====================
 
-  // 📍 读取悬浮栏位置
   function loadFloatBarPosition() {
     try {
       const saved = localStorage.getItem('ha-float-bar-position');
@@ -4911,11 +7549,9 @@ async function showBgm() {
     } catch (e) {
       debug('读取悬浮栏位置失败', e);
     }
-    // 默认位置
     return { top: '50%', right: '10px', transform: 'translateY(-50%)' };
   }
 
-  // 💾 保存悬浮栏位置
   function saveFloatBarPosition(position) {
     try {
       localStorage.setItem('ha-float-bar-position', JSON.stringify(position));
@@ -4930,7 +7566,7 @@ async function showBgm() {
     const floatBar = document.createElement('div');
     floatBar.id = 'ha-float-bar';
     floatBar.innerHTML = `
-      <div id="ha-float-lyric" style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">等待播放...</div>
+      <div id="ha-float-lyric" style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#000;">等待播放...</div>
       <button id="ha-float-show" style="background:none;border:none;font-size:18px;cursor:pointer;padding:0 8px;color:#4169E1;">🎵</button>
     `;
     
@@ -4945,21 +7581,19 @@ async function showBgm() {
       display: flex;
       align-items: center;
       gap: 8px;
-      width: 250px;
+      width: 280px;
       z-index: 99998;
       cursor: move;
       user-select: none;
       transition: opacity 0.3s ease;
     `;
 
-    // 📍 恢复上次位置
     const savedPos = loadFloatBarPosition();
     if (savedPos.top) floatBar.style.top = savedPos.top;
     if (savedPos.right) floatBar.style.right = savedPos.right;
     if (savedPos.left) floatBar.style.left = savedPos.left;
     if (savedPos.transform) floatBar.style.transform = savedPos.transform;
 
-    // 移动端适配
     if (window.innerWidth <= 768) {
       floatBar.style.fontSize = '12px';
       floatBar.style.padding = '6px 10px';
@@ -4967,7 +7601,6 @@ async function showBgm() {
 
     document.body.appendChild(floatBar);
 
-    // 拖动功能
     let isDragging = false;
     let startX, startY, initialX, initialY;
 
@@ -5017,7 +7650,6 @@ async function showBgm() {
       isDragging = false;
       floatBar.style.transition = 'opacity 0.3s ease';
       
-      // 💾 保存当前位置
       const rect = floatBar.getBoundingClientRect();
       saveFloatBarPosition({
         top: rect.top + 'px',
@@ -5032,7 +7664,6 @@ async function showBgm() {
     document.addEventListener('mouseup', stopDrag);
     document.addEventListener('touchend', stopDrag);
 
-    // 🎵 点击返回播放器 (不重新播放)
     document.getElementById('ha-float-show').onclick = (e) => {
       e.stopPropagation();
       showMusicPlayerWithoutReplay();
@@ -5049,11 +7680,20 @@ async function showBgm() {
       const text = Lyrics_Data[Current_Lyric_Index].text;
       floatLyric.textContent = text;
       
-      if (floatLyric.scrollWidth > floatLyric.clientWidth) {
-        floatLyric.style.animation = 'scroll-lyric 8s linear infinite';
-      } else {
-        floatLyric.style.animation = 'none';
-      }
+      // 延迟检测宽度，确保文本已渲染
+      setTimeout(() => {
+        if (floatLyric.scrollWidth > floatLyric.clientWidth) {
+          // 如果文本超出容器，添加重复文本用于无缝滚动
+          floatLyric.innerHTML = `<span style="display:inline-block;">${text}&nbsp;&nbsp;&nbsp;${text}</span>`;
+          const span = floatLyric.querySelector('span');
+          if (span) {
+            const scrollDistance = span.offsetWidth / 2;
+            span.style.animation = `scroll-lyric-seamless ${Math.max(8, scrollDistance / 30)}s linear infinite`;
+          }
+        } else {
+          floatLyric.style.animation = 'none';
+        }
+      }, 50);
     } else {
       floatLyric.textContent = Music_Audio.paused ? '已暂停' : '播放中...';
       floatLyric.style.animation = 'none';
@@ -5066,24 +7706,21 @@ async function showBgm() {
     Float_Bar_Active = false;
   }
 
-  // 🔧 新增: 不重新播放地打开播放器
   function showMusicPlayerWithoutReplay() {
     removeFloatBar();
     
     if (Current_Playing_Song) {
-      // 重建播放器UI,但不调用playSong
       openMusicPlayerUI(Current_Playing_Song.name, Current_Playing_Song.artist, true);
     }
   }
 
-  // 添加滚动动画样式
   if (!document.getElementById('ha-float-animations')) {
     const style = document.createElement('style');
     style.id = 'ha-float-animations';
     style.textContent = `
-      @keyframes scroll-lyric {
-        0%, 10% { transform: translateX(0); }
-        90%, 100% { transform: translateX(-50%); }
+      @keyframes scroll-lyric-seamless {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-50%); }
       }
     `;
     document.head.appendChild(style);
@@ -5183,16 +7820,31 @@ async function showBgm() {
     });
   }
 
-  // ==================== 播放器 UI (拆分版本) ====================
+  // ==================== 播放器 UI ====================
   
-  // 🔧 拆分: 打开播放器并播放歌曲
   async function openMusicPlayer(name, artist) {
     await openMusicPlayerUI(name, artist, false);
   }
 
-  // 🔧 新增: 打开播放器UI (可选是否重新播放)
   async function openMusicPlayerUI(name, artist, skipPlay = false) {
     let existing = document.getElementById('ha-music-popup');
+    
+    // 🔧 核心修复1: 如果播放器已存在,只更新内容不重新创建
+    if (existing && !skipPlay) {
+      debug('[播放器] 已存在,只更新内容');
+      
+      // 更新标题
+      const titleSpan = existing.querySelector('.ha-music-title');
+      if (titleSpan) {
+        titleSpan.textContent = `🎵 ${name} - ${artist}`;
+      }
+      
+      // 播放新歌曲
+      await playSong(name, artist);
+      return;
+    }
+    
+    // 播放器不存在,创建新的
     if (existing) existing.remove();
 
     const popup = document.createElement('div');
@@ -5201,13 +7853,16 @@ async function showBgm() {
       <div style="
         background:#F8F8FF;color:#fff;border-radius:12px;
         width:90%;max-width:420px;max-height:80vh;
-        position:fixed;left:10px;top:50px;
+        position:fixed;
+        left:50%;
+        top:50px;
+        transform:translate(-50%, 0%);
         box-shadow:0 4px 20px rgba(0,0,0,0.4);
         display:flex;flex-direction:column;
         overflow:hidden;z-index:99999;">
         
         <div style="padding:10px 16px;font-weight:600;color:#778899;display:flex;justify-content:space-between;align-items:center;">
-          <span>🎵 ${name} - ${artist}</span>
+          <span class="ha-music-title">🎵 ${name} - ${artist}</span>
           <div style="display:flex;gap:8px;">
             <button id="ha-music-float" style="background:none;border:none;color:#778899;font-size:16px;cursor:pointer;" title="悬浮显示">📌</button>
             <button id="ha-music-close" style="background:none;border:none;color:#778899;font-size:18px;cursor:pointer;">✖</button>
@@ -5233,13 +7888,11 @@ async function showBgm() {
       </div>`;
     document.body.appendChild(popup);
 
-    // 关闭按钮
     document.getElementById('ha-music-close').onclick = () => {
       popup.remove();
       removeFloatBar();
     };
 
-    // 悬浮按钮
     document.getElementById('ha-music-float').onclick = () => {
       if (Float_Bar_Active) {
         removeFloatBar();
@@ -5255,9 +7908,7 @@ async function showBgm() {
     document.getElementById('ha-next').onclick = playNext;
     document.getElementById('ha-mode').onclick = toggleMode;
 
-    // 🔧 关键修复: 如果是从悬浮栏返回,不重新播放
     if (skipPlay) {
-      // 恢复歌词显示
       if (Lyrics_Data.length > 0) {
         renderLyrics();
       } else {
@@ -5267,19 +7918,16 @@ async function showBgm() {
         }
       }
       
-      // 恢复播放按钮状态
       const playBtn = document.getElementById('ha-play');
       if (playBtn) {
         playBtn.textContent = Music_Audio.paused ? '▶️' : '⏸️';
       }
       
-      // 恢复进度条
       const progress = document.getElementById('ha-progress');
       if (progress && Music_Audio.duration) {
         progress.value = (Music_Audio.currentTime / Music_Audio.duration) * 100;
       }
       
-      // 重新绑定进度条事件
       if (progress) {
         progress.oninput = e => {
           if (!Music_Audio.duration) return;
@@ -5288,7 +7936,6 @@ async function showBgm() {
         };
       }
     } else {
-      // 首次播放
       await playSong(name, artist);
       
       const progress = document.getElementById('ha-progress');
@@ -5325,10 +7972,22 @@ async function showBgm() {
     }
   }
 
+  // 🔧 核心修复2: 切换歌曲时检查播放器是否存在
   function playPrev() {
     if (Music_List.length === 0) return;
     Music_Index = (Music_Index - 1 + Music_List.length) % Music_List.length;
-    openMusicPlayer(Music_List[Music_Index].name, Music_List[Music_Index].artist);
+    
+    const popup = document.getElementById('ha-music-popup');
+    if (popup) {
+      // 播放器已打开,只更新内容
+      openMusicPlayer(Music_List[Music_Index].name, Music_List[Music_Index].artist);
+    } else if (Float_Bar_Active) {
+      // 悬浮栏模式,直接播放不打开播放器
+      playSongInBackground(Music_List[Music_Index].name, Music_List[Music_Index].artist);
+    } else {
+      // 都没打开,正常打开播放器
+      openMusicPlayer(Music_List[Music_Index].name, Music_List[Music_Index].artist);
+    }
   }
 
   function playNext() {
@@ -5337,7 +7996,54 @@ async function showBgm() {
       Music_Index = Math.floor(Math.random() * Music_List.length);
     else
       Music_Index = (Music_Index + 1) % Music_List.length;
-    openMusicPlayer(Music_List[Music_Index].name, Music_List[Music_Index].artist);
+    
+    const popup = document.getElementById('ha-music-popup');
+    if (popup) {
+      // 播放器已打开,只更新内容
+      openMusicPlayer(Music_List[Music_Index].name, Music_List[Music_Index].artist);
+    } else if (Float_Bar_Active) {
+      // 悬浮栏模式,直接播放不打开播放器
+      playSongInBackground(Music_List[Music_Index].name, Music_List[Music_Index].artist);
+    } else {
+      // 都没打开,正常打开播放器
+      openMusicPlayer(Music_List[Music_Index].name, Music_List[Music_Index].artist);
+    }
+  }
+
+  // 🔧 新增: 后台播放(不显示UI)
+  async function playSongInBackground(name, artist) {
+    debug(`[后台播放] ${name} - ${artist}`);
+    
+    Current_Playing_Song = { name, artist };
+    Is_Currently_Playing = true;
+    
+    Lyrics_Data = [];
+    Current_Lyric_Index = -1;
+    
+    try {
+      // 获取歌词
+      const lyricData = await getLyricsData(name, artist);
+      Lyrics_Data = parseLRC(lyricData.lrc);
+      
+      // 获取音源
+      const url = await getMusicUrl(name, artist);
+      
+      if (!url) {
+        toaster(`找不到音源: ${name} - ${artist}`, 'error');
+        return;
+      }
+      
+      // 播放
+      Music_Audio.src = url;
+      await Music_Audio.play();
+      Music_Audio.ontimeupdate = updateLyrics;
+      
+      toaster(`🎵 ${name} - ${artist}`, 'success');
+      
+    } catch (error) {
+      debug('[后台播放] 异常:', error);
+      toaster('播放失败', 'error');
+    }
   }
 
   // ==================== 播放歌曲 ====================
@@ -5349,7 +8055,6 @@ async function showBgm() {
       return;
     }
     
-    // 🔧 保存当前播放歌曲
     Current_Playing_Song = { name, artist };
     Is_Currently_Playing = true;
     
@@ -5766,6 +8471,18 @@ async function showBgm() {
     }
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 async function showClearBook() {
   content.innerHTML = `
@@ -6431,7 +9148,7 @@ async function showClearBook() {
 
 
       // ------------- 完整独立 API 配置模块（集成参考代码） -------------
-      function showApiConfig(){
+  function showApiConfig(){
         content.style.display = 'block';
         // 使 content 相对定位，便于右上角设置按钮定位
         content.style.position = 'relative';
@@ -6439,25 +9156,58 @@ async function showClearBook() {
         content.innerHTML = `
           <div style="font-weight:600;margin-bottom:6px">独立 API 配置</div>
 
-          <div style="margin-bottom:6px">
-            <label style="font-size:12px;color:#666;display:block">API URL</label>
-            <input id="ha-api-url" type="text" style="width:100%;padding:6px" value="${cfg.url || ''}" />
+          <div style="margin-bottom:10px">
+            <label style="font-size:12px;color:#666;display:block;margin-bottom:4px">API 类型</label>
+            <select id="ha-api-type" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px">
+              <option value="standard">标准 API（自动获取模型列表）</option>
+              <option value="custom">自定义 API（手动输入完整信息）</option>
+            </select>
           </div>
 
-          <div style="margin-bottom:6px">
-            <label style="font-size:12px;color:#666;display:block">API Key</label>
-            <input id="ha-api-key" type="text" style="width:100%;padding:6px" value="${cfg.key || ''}" />
+          <div id="ha-standard-api-section">
+            <div style="margin-bottom:6px">
+              <label style="font-size:12px;color:#666;display:block">API URL</label>
+              <input id="ha-api-url" type="text" style="width:100%;padding:6px" value="${cfg.url || ''}" placeholder="例如: https://api.example.com" />
+            </div>
+
+            <div style="margin-bottom:6px">
+              <label style="font-size:12px;color:#666;display:block">API Key</label>
+              <input id="ha-api-key" type="text" style="width:100%;padding:6px" value="${cfg.key || ''}" placeholder="sk-..." />
+            </div>
+
+            <div style="margin-bottom:6px">
+              <label style="font-size:12px;color:#666;display:block">模型</label>
+              <select id="ha-api-model" style="width:100%;padding:6px"></select>
+            </div>
+
+            <div style="display:flex;gap:8px;margin-bottom:6px">
+              <button id="ha-api-save" class="ha-btn" style="flex:1">保存配置</button>
+              <button id="ha-api-test" class="ha-btn" style="flex:1">测试连接</button>
+              <button id="ha-api-refresh" class="ha-btn" style="flex:1">刷新模型</button>
+            </div>
           </div>
 
-          <div style="margin-bottom:6px">
-            <label style="font-size:12px;color:#666;display:block">模型</label>
-            <select id="ha-api-model" style="width:100%;padding:6px"></select>
-          </div>
+          <div id="ha-custom-api-section" style="display:none">
+            <div style="margin-bottom:6px">
+              <label style="font-size:12px;color:#666;display:block">完整 API URL</label>
+              <input id="ha-custom-url" type="text" style="width:100%;padding:6px" value="${cfg.customUrl || ''}" placeholder="例如: https://api.example.com/v1/chat/completions" />
+              <div style="font-size:11px;color:#999;margin-top:2px">请输入完整的API端点地址</div>
+            </div>
 
-          <div style="display:flex;gap:8px;margin-bottom:6px">
-            <button id="ha-api-save" class="ha-btn" style="flex:1">保存配置</button>
-            <button id="ha-api-test" class="ha-btn" style="flex:1">测试连接</button>
-            <button id="ha-api-refresh" class="ha-btn" style="flex:1">刷新模型</button>
+            <div style="margin-bottom:6px">
+              <label style="font-size:12px;color:#666;display:block">完整 API Key</label>
+              <input id="ha-custom-key" type="text" style="width:100%;padding:6px" value="${cfg.customKey || ''}" placeholder="Bearer token 或其他认证信息" />
+            </div>
+
+            <div style="margin-bottom:6px">
+              <label style="font-size:12px;color:#666;display:block">完整模型名称</label>
+              <input id="ha-custom-model" type="text" style="width:100%;padding:6px" value="${cfg.customModel || ''}" placeholder="例如: gpt-4, claude-3-opus-20240229" />
+            </div>
+
+            <div style="display:flex;gap:8px;margin-bottom:6px">
+              <button id="ha-custom-save" class="ha-btn" style="flex:1">保存自定义配置</button>
+              <button id="ha-custom-test" class="ha-btn" style="flex:1">测试连接</button>
+            </div>
           </div>
 
           <div id="ha-api-status" class="ha-small"></div>
@@ -6507,6 +9257,33 @@ async function showClearBook() {
         // 载入已有配置到 localStorage 兼容（保持向后兼容）
         const modelSelect = document.getElementById('ha-api-model');
         const savedModel = localStorage.getItem('independentApiModel') || cfg.model || '';
+        const apiTypeSelect = document.getElementById('ha-api-type');
+        const standardSection = document.getElementById('ha-standard-api-section');
+        const customSection = document.getElementById('ha-custom-api-section');
+
+        // 恢复API类型选择
+        const savedApiType = localStorage.getItem('independentApiType') || cfg.apiType || 'standard';
+        apiTypeSelect.value = savedApiType;
+        
+        // 根据API类型显示对应区域
+        function toggleApiSections() {
+          if (apiTypeSelect.value === 'custom') {
+            standardSection.style.display = 'none';
+            customSection.style.display = 'block';
+          } else {
+            standardSection.style.display = 'block';
+            customSection.style.display = 'none';
+          }
+        }
+        
+        toggleApiSections();
+        
+        // 监听API类型变化
+        apiTypeSelect.addEventListener('change', () => {
+          toggleApiSections();
+          localStorage.setItem('independentApiType', apiTypeSelect.value);
+          debugLog('切换API类型', apiTypeSelect.value);
+        });
 
         // populateModelSelect 函数
         function populateModelSelect(models) {
@@ -6562,8 +9339,9 @@ async function showClearBook() {
           localStorage.setItem('independentApiUrl', url);
           if (key) localStorage.setItem('independentApiKey', key);
           if (model) localStorage.setItem('independentApiModel', model);
+          localStorage.setItem('independentApiType', 'standard');
           // 同步到 extensionSettings
-          ctx.extensionSettings[MODULE_NAME].apiConfig = { url, key, model };
+          ctx.extensionSettings[MODULE_NAME].apiConfig = { url, key, model, apiType: 'standard' };
           saveSettings();
           // 标记选中 option 为已保存样式
           Array.from(modelSelect.options).forEach(o => {
@@ -6572,6 +9350,89 @@ async function showClearBook() {
           });
           document.getElementById('ha-api-status').textContent = '已保存';
           debugLog('保存API配置', {url, model});
+        });
+
+        // 保存自定义API配置
+        document.getElementById('ha-custom-save').addEventListener('click', () => {
+          const customUrl = document.getElementById('ha-custom-url').value.trim();
+          const customKey = document.getElementById('ha-custom-key').value.trim();
+          const customModel = document.getElementById('ha-custom-model').value.trim();
+          
+          if (!customUrl || !customModel) {
+            alert('请至少填写完整 API URL 和模型名称');
+            return;
+          }
+          
+          // 保存到 localStorage
+          localStorage.setItem('independentApiCustomUrl', customUrl);
+          localStorage.setItem('independentApiCustomKey', customKey);
+          localStorage.setItem('independentApiCustomModel', customModel);
+          localStorage.setItem('independentApiType', 'custom');
+          
+          // 同步到 extensionSettings
+          ctx.extensionSettings[MODULE_NAME].apiConfig = {
+            customUrl,
+            customKey,
+            customModel,
+            apiType: 'custom'
+          };
+          saveSettings();
+          
+          document.getElementById('ha-api-status').textContent = '自定义API配置已保存';
+          debugLog('保存自定义API配置', { customUrl, customModel });
+        });
+
+        // 测试自定义API连接
+        document.getElementById('ha-custom-test').addEventListener('click', async () => {
+          const customUrl = document.getElementById('ha-custom-url').value.trim() || localStorage.getItem('independentApiCustomUrl');
+          const customKey = document.getElementById('ha-custom-key').value.trim() || localStorage.getItem('independentApiCustomKey');
+          const customModel = document.getElementById('ha-custom-model').value.trim() || localStorage.getItem('independentApiCustomModel');
+          
+          if (!customUrl || !customModel) {
+            alert('请至少填写完整 API URL 和模型名称');
+            return;
+          }
+          
+          document.getElementById('ha-api-status').textContent = '正在测试自定义API...';
+          debugLog('测试自定义API开始', { customUrl, customModel });
+          
+          try {
+            const headers = {
+              'Content-Type': 'application/json'
+            };
+            
+            // 如果提供了key，添加到headers
+            if (customKey) {
+              // 判断是否已经包含Bearer前缀
+              if (customKey.toLowerCase().startsWith('bearer ')) {
+                headers['Authorization'] = customKey;
+              } else {
+                headers['Authorization'] = `Bearer ${customKey}`;
+              }
+            }
+            
+            const res = await fetch(customUrl, {
+              method: 'POST',
+              headers: headers,
+              body: JSON.stringify({
+                model: customModel,
+                messages: [{ role: 'user', content: 'ping' }],
+                max_tokens: 1
+              })
+            });
+            
+            if (!res.ok) {
+              const errorText = await res.text();
+              throw new Error(`HTTP ${res.status}: ${errorText}`);
+            }
+            
+            const data = await res.json();
+            document.getElementById('ha-api-status').textContent = `自定义API测试成功！模型 ${customModel} 可用`;
+            debugLog('自定义API测试成功', data);
+          } catch (e) {
+            document.getElementById('ha-api-status').textContent = '自定义API连接失败: ' + (e.message || e);
+            debugLog('自定义API测试失败', e.message || e);
+          }
         });
 
         // 测试连接（优先 GET /v1/models/{model}，fallback 到 chat/completions）
@@ -6699,6 +9560,24 @@ async function showClearBook() {
         // 首次打开时尝试拉取（非强制：会遵循已拉取过则不重复）
         fetchAndPopulateModels(false);
       }
+// 启动时检查
+checkAndPerformSleepAutoClean();
+checkAndPerformDietAutoClean();
+checkAndPerformExerciseAutoClean();
+checkAndPerformMentalAutoClean();
+checkAndPerformMemoAutoClean();
+// 延迟执行清除(确保所有模块初始化完成)
+setTimeout(() => {
+  performAllAutoClean();
+}, 2000);
+// 每小时检查一次（在04:00-05:00之间会触发）
+setInterval(() => {
+  checkAndPerformSleepAutoClean();
+  checkAndPerformDietAutoClean();
+  checkAndPerformExerciseAutoClean();
+  checkAndPerformMentalAutoClean();
+  checkAndPerformMemoAutoClean();
+}, 60 * 60 * 1000);
 
      
 
