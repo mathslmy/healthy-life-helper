@@ -1,4 +1,4 @@
-// 健康生活助手 - 完整版本（包含睡眠、饮食、运动、心理健康、备忘录定期清除功能）
+// 健康生活助手 - 完整版本（包含睡眠、饮食、运动、心理健康、备忘录、财务、主题定期清除功能）
 
 import { extension_settings, getContext, loadExtensionSettings } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
@@ -33,8 +33,9 @@ ready(() => {
         exercise: [],
         wishes: [],
         social: {},
-        todo: [],
+        todos: [],
         memo: [],
+        reviews: [],
         bgmTags: [],
         pomodoro: {
           timeBlocks: [],
@@ -66,37 +67,45 @@ ready(() => {
           expenseTags: [],
           records: []
         },
+        theme: {
+          mainBackground: null,
+          subpanelBackground: null,
+          mainColor: null,
+          subpanelColor: null,
+          buttonColor: null
+        },
         apiConfig: {},
-        // 睡眠定期清除配置
         sleepAutoClean: {
           days: 30,
           cleanLocalStorage: false,
           cleanWorldBook: false,
           lastCleanDate: null
         },
-        // 饮食定期清除配置
         dietAutoClean: {
           days: 30,
           cleanLocalStorage: false,
           cleanWorldBook: false,
           lastCleanDate: null
         },
-        // 运动定期清除配置
         exerciseAutoClean: {
           days: 30,
           cleanLocalStorage: false,
           cleanWorldBook: false,
           lastCleanDate: null
         },
-        // 心理健康定期清除配置
         mentalAutoClean: {
           days: 30,
           cleanLocalStorage: false,
           cleanWorldBook: false,
           lastCleanDate: null
         },
-        // ========== 备忘录定期清除配置 ==========
         memoAutoClean: {
+          days: 30,
+          cleanLocalStorage: false,
+          cleanWorldBook: false,
+          lastCleanDate: null
+        },
+        financeAutoClean: {
           days: 30,
           cleanLocalStorage: false,
           cleanWorldBook: false,
@@ -144,6 +153,21 @@ ready(() => {
         settings.finance.records = settings.finance.records || [];
       }
       
+      // 修复 theme
+      if (!settings.theme) {
+        settings.theme = {
+          mainBackground: null,
+          subpanelBackground: null,
+          mainColor: null,
+          subpanelColor: null,
+          buttonColor: null
+        };
+      } else {
+        if (settings.theme.mainColor === undefined) settings.theme.mainColor = null;
+        if (settings.theme.subpanelColor === undefined) settings.theme.subpanelColor = null;
+        if (settings.theme.buttonColor === undefined) settings.theme.buttonColor = null;
+      }
+      
       // 修复 pomodoro
       if (!settings.pomodoro || Array.isArray(settings.pomodoro)) {
         const oldRecords = Array.isArray(settings.pomodoro) ? settings.pomodoro : [];
@@ -175,6 +199,33 @@ ready(() => {
         }
       }
       
+      // 修复并转换 todos 数据格式
+      if (!settings.todos) {
+        settings.todos = [];
+      } else if (Array.isArray(settings.todos)) {
+        settings.todos = settings.todos.map(t => {
+          if (!t.id) {
+            t.id = 'todo_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+          }
+          
+          if (t.name === undefined) t.name = '';
+          if (t.due === undefined) t.due = '';
+          if (t.priority === undefined) t.priority = 3;
+          if (t.tag === undefined) t.tag = '';
+          if (t.done === undefined) t.done = false;
+          if (t.notifyScheduled === undefined) t.notifyScheduled = false;
+          if (t.focused === undefined) t.focused = 0;
+          
+          if (t.recurrence === undefined) {
+            t.recurrence = null;
+          }
+          
+          return t;
+        });
+        
+        console.log(`[健康生活助手] Todos 数据已转换: ${settings.todos.length} 条记录`);
+      }
+      
       // 确保其他数组存在
       settings.sleep = settings.sleep || [];
       settings.diet = settings.diet || [];
@@ -184,12 +235,12 @@ ready(() => {
       settings.confessions = settings.confessions || [];
       settings.exercise = settings.exercise || [];
       settings.wishes = settings.wishes || [];
-      settings.todo = settings.todo || [];
       settings.memo = settings.memo || [];
+      settings.reviews = settings.reviews || [];
       settings.bgmTags = settings.bgmTags || [];
       settings.social = settings.social || {};
       
-      // 初始化睡眠定期清除配置
+      // 初始化各种定期清除配置
       if (!settings.sleepAutoClean) {
         settings.sleepAutoClean = {
           days: 30,
@@ -199,7 +250,6 @@ ready(() => {
         };
       }
       
-      // 初始化饮食定期清除配置
       if (!settings.dietAutoClean) {
         settings.dietAutoClean = {
           days: 30,
@@ -209,7 +259,6 @@ ready(() => {
         };
       }
       
-      // 初始化运动定期清除配置
       if (!settings.exerciseAutoClean) {
         settings.exerciseAutoClean = {
           days: 30,
@@ -219,7 +268,6 @@ ready(() => {
         };
       }
       
-      // 初始化心理健康定期清除配置
       if (!settings.mentalAutoClean) {
         settings.mentalAutoClean = {
           days: 30,
@@ -229,9 +277,17 @@ ready(() => {
         };
       }
       
-      // ========== 初始化备忘录定期清除配置 ==========
       if (!settings.memoAutoClean) {
         settings.memoAutoClean = {
+          days: 30,
+          cleanLocalStorage: false,
+          cleanWorldBook: false,
+          lastCleanDate: null
+        };
+      }
+      
+      if (!settings.financeAutoClean) {
+        settings.financeAutoClean = {
           days: 30,
           cleanLocalStorage: false,
           cleanWorldBook: false,
@@ -317,14 +373,15 @@ ready(() => {
       }
     }
     
-    // ========== 睡眠定期清除调度逻辑 ==========
+    
+    // 睡眠定期清除调度逻辑
     function checkAndPerformSleepAutoClean() {
       const config = ctx.extensionSettings[MODULE_NAME].sleepAutoClean;
       if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
         return;
       }
       
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const today = new Date().toISOString().split('T')[0];
       const now = new Date();
       const currentHour = now.getHours();
       
@@ -340,14 +397,14 @@ ready(() => {
       }
     }
     
-    // ========== 饮食定期清除调度逻辑 ==========
+    // 饮食定期清除调度逻辑
     function checkAndPerformDietAutoClean() {
       const config = ctx.extensionSettings[MODULE_NAME].dietAutoClean;
       if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
         return;
       }
       
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const today = new Date().toISOString().split('T')[0];
       const now = new Date();
       const currentHour = now.getHours();
       
@@ -363,14 +420,14 @@ ready(() => {
       }
     }
     
-    // ========== 运动定期清除调度逻辑 ==========
+    // 运动定期清除调度逻辑
     function checkAndPerformExerciseAutoClean() {
       const config = ctx.extensionSettings[MODULE_NAME].exerciseAutoClean;
       if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
         return;
       }
       
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const today = new Date().toISOString().split('T')[0];
       const now = new Date();
       const currentHour = now.getHours();
       
@@ -386,14 +443,14 @@ ready(() => {
       }
     }
     
-    // ========== 心理健康定期清除调度逻辑 ==========
+    // 心理健康定期清除调度逻辑
     function checkAndPerformMentalAutoClean() {
       const config = ctx.extensionSettings[MODULE_NAME].mentalAutoClean;
       if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
         return;
       }
       
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const today = new Date().toISOString().split('T')[0];
       const now = new Date();
       const currentHour = now.getHours();
       
@@ -409,14 +466,14 @@ ready(() => {
       }
     }
     
-    // ========== 备忘录定期清除调度逻辑 ==========
+    // 备忘录定期清除调度逻辑
     function checkAndPerformMemoAutoClean() {
       const config = ctx.extensionSettings[MODULE_NAME].memoAutoClean;
       if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
         return;
       }
       
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const today = new Date().toISOString().split('T')[0];
       const now = new Date();
       const currentHour = now.getHours();
       
@@ -432,12 +489,33 @@ ready(() => {
       }
     }
     
-    // 启动时检查
-    // ========== 启动时统一执行定期清除 ==========
+    // 财务定期清除调度逻辑
+    function checkAndPerformFinanceAutoClean() {
+      const config = ctx.extensionSettings[MODULE_NAME].financeAutoClean;
+      if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+        return;
+      }
+      
+      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      const needsClean = !config.lastCleanDate || 
+                        (config.lastCleanDate !== today && currentHour >= 4);
+      
+      if (needsClean) {
+        console.log('[健康生活助手] 标记财务定期清除...');
+        ctx.extensionSettings[MODULE_NAME].financeAutoClean._needsClean = true;
+        if (ctx.saveSettingsDebounced) {
+          ctx.saveSettingsDebounced();
+        }
+      }
+    }
+    
+    // 启动时统一执行定期清除
 async function performAllAutoClean() {
   console.log('[健康生活助手] 开始检查所有模块的定期清除任务');
   
-  // 睡眠定期清除
   const sleepConfig = ctx.extensionSettings[MODULE_NAME].sleepAutoClean;
   if (sleepConfig && sleepConfig._needsClean) {
     console.log('[健康生活助手] 执行睡眠定期清除');
@@ -448,7 +526,6 @@ async function performAllAutoClean() {
     }
   }
   
-  // 饮食定期清除
   const dietConfig = ctx.extensionSettings[MODULE_NAME].dietAutoClean;
   if (dietConfig && dietConfig._needsClean) {
     console.log('[健康生活助手] 执行饮食定期清除');
@@ -459,7 +536,6 @@ async function performAllAutoClean() {
     }
   }
   
-  // 运动定期清除
   const exerciseConfig = ctx.extensionSettings[MODULE_NAME].exerciseAutoClean;
   if (exerciseConfig && exerciseConfig._needsClean) {
     console.log('[健康生活助手] 执行运动定期清除');
@@ -470,7 +546,6 @@ async function performAllAutoClean() {
     }
   }
   
-  // 心理健康定期清除
   const mentalConfig = ctx.extensionSettings[MODULE_NAME].mentalAutoClean;
   if (mentalConfig && mentalConfig._needsClean) {
     console.log('[健康生活助手] 执行心理健康定期清除');
@@ -481,7 +556,6 @@ async function performAllAutoClean() {
     }
   }
   
-  // 备忘录定期清除
   const memoConfig = ctx.extensionSettings[MODULE_NAME].memoAutoClean;
   if (memoConfig && memoConfig._needsClean) {
     console.log('[健康生活助手] 执行备忘录定期清除');
@@ -492,14 +566,24 @@ async function performAllAutoClean() {
     }
   }
   
-  // 保存设置
+  const financeConfig = ctx.extensionSettings[MODULE_NAME].financeAutoClean;
+  if (financeConfig && financeConfig._needsClean) {
+    console.log('[健康生活助手] 执行财务定期清除');
+    delete financeConfig._needsClean;
+    if (financeConfig.cleanLocalStorage || financeConfig.cleanWorldBook) {
+      await performFinanceAutoClean(financeConfig.days);
+      toastr.info(`已自动清除 ${financeConfig.days} 天前的财务记录`, '定期清除');
+    }
+  }
+  
   if (ctx.saveSettingsDebounced) {
     ctx.saveSettingsDebounced();
   }
   
   console.log('[健康生活助手] 定期清除检查完成');
 }
-// ========== 睡眠定期清除函数 ==========
+
+// 睡眠定期清除函数
 async function performSleepAutoClean(daysToKeep) {
   const config = ctx.extensionSettings[MODULE_NAME].sleepAutoClean;
   if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
@@ -581,7 +665,8 @@ async function performSleepAutoClean(daysToKeep) {
   config.lastCleanDate = new Date().toISOString().split('T')[0];
   saveSettings();
 }
-// ========== 饮食定期清除函数 ==========
+
+// 饮食定期清除函数
 async function performDietAutoClean(daysToKeep) {
   const config = ctx.extensionSettings[MODULE_NAME].dietAutoClean;
   if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
@@ -662,7 +747,8 @@ async function performDietAutoClean(daysToKeep) {
   config.lastCleanDate = new Date().toISOString().split('T')[0];
   saveSettings();
 }
-// ========== 运动定期清除函数 ==========
+
+// 运动定期清除函数
 async function performExerciseAutoClean(daysToKeep) {
   const config = ctx.extensionSettings[MODULE_NAME].exerciseAutoClean;
   if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
@@ -745,7 +831,7 @@ async function performExerciseAutoClean(daysToKeep) {
           
           const newContent = enabledRecords.map(rec => {
             const localISOTime = toLocalISOString(rec.ts);
-            return `运动记录 @ ${localISOTime}：${rec.text}`;
+            return `运动记录 @ ${localISOTime}:${rec.text}`;
           }).join('\n');
           
           await globalThis.SillyTavern.getContext()
@@ -763,7 +849,8 @@ async function performExerciseAutoClean(daysToKeep) {
   config.lastCleanDate = new Date().toISOString().split('T')[0];
   saveSettings();
 }
-// ========== 心理健康定期清除函数 ==========
+
+// 心理健康定期清除函数
 async function performMentalAutoClean(daysToKeep) {
   const config = ctx.extensionSettings[MODULE_NAME].mentalAutoClean;
   if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
@@ -850,7 +937,8 @@ async function performMentalAutoClean(daysToKeep) {
   config.lastCleanDate = new Date().toISOString().split('T')[0];
   saveSettings();
 }
-// ========== 备忘录定期清除函数 ==========
+
+// 备忘录定期清除函数
 async function performMemoAutoClean(daysToKeep) {
   const config = ctx.extensionSettings[MODULE_NAME].memoAutoClean;
   if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
@@ -930,6 +1018,103 @@ async function performMemoAutoClean(daysToKeep) {
   saveSettings();
 }
 
+// 财务定期清除函数
+async function performFinanceAutoClean(daysToKeep) {
+  const config = ctx.extensionSettings[MODULE_NAME].financeAutoClean;
+  if (!config || (!config.cleanLocalStorage && !config.cleanWorldBook)) {
+    return;
+  }
+  
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+  
+  function parseISODate(isoString) {
+    const match = isoString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+  }
+  
+  const records = ctx.extensionSettings[MODULE_NAME].finance.records || [];
+  
+  if (config.cleanLocalStorage) {
+    const filteredRecords = records.filter(rec => {
+      const recDate = parseISODate(rec.date);
+      return recDate && recDate >= cutoffDate;
+    });
+    
+    const removedCount = records.length - filteredRecords.length;
+    if (removedCount > 0) {
+      ctx.extensionSettings[MODULE_NAME].finance.records = filteredRecords;
+      saveSettings();
+      console.log(`[健康生活助手] 自动清除: 从 localStorage 删除了 ${removedCount} 条财务记录`);
+    }
+  }
+  
+  if (config.cleanWorldBook) {
+    try {
+      const moduleWI = await import('/scripts/world-info.js');
+      const selected = moduleWI.selected_world_info || [];
+      let fileId = null;
+      for (const WI of selected) {
+        if (WI.includes('健康生活助手')) {
+          fileId = WI;
+          break;
+        }
+      }
+      
+      if (fileId) {
+        const worldInfo = await moduleWI.loadWorldInfo(fileId);
+        const entries = worldInfo.entries || {};
+        
+        let incomeUID = null;
+        let expenseUID = null;
+        for (const id in entries) {
+          const entry = entries[id];
+          if (!entry.disable) {
+            if (entry.title === '收入') incomeUID = entry.uid;
+            if (entry.title === '支出') expenseUID = entry.uid;
+          }
+        }
+        
+        if (incomeUID) {
+          const currentRecords = ctx.extensionSettings[MODULE_NAME].finance.records || [];
+          const incomeList = currentRecords
+            .filter(r => r.type === 'income')
+            .map((r, i) => `${i+1}. ${r.date} ${r.tag}${r.name?`(${r.name})`:''}:${r.value}元`);
+          
+          const newContent = incomeList.join('\n');
+          
+          await globalThis.SillyTavern.getContext()
+            .SlashCommandParser.commands['setentryfield']
+            .callback({ file: fileId, uid: incomeUID, field: 'content' }, newContent);
+          
+          console.log('[健康生活助手] 自动清除: 已同步"收入"世界书');
+        }
+        
+        if (expenseUID) {
+          const currentRecords = ctx.extensionSettings[MODULE_NAME].finance.records || [];
+          const expenseList = currentRecords
+            .filter(r => r.type === 'expense')
+            .map((r, i) => `${i+1}. ${r.date} ${r.tag}${r.name?`(${r.name})`:''}:${r.value}元`);
+          
+          const newContent = expenseList.join('\n');
+          
+          await globalThis.SillyTavern.getContext()
+            .SlashCommandParser.commands['setentryfield']
+            .callback({ file: fileId, uid: expenseUID, field: 'content' }, newContent);
+          
+          console.log('[健康生活助手] 自动清除: 已同步"支出"世界书');
+        }
+      }
+    } catch (e) {
+      console.error('[健康生活助手] 自动清除财务世界书失败:', e);
+    }
+  }
+  
+  config.lastCleanDate = new Date().toISOString().split('T')[0];
+  saveSettings();
+}
+
     
     // 创建 DOM
     if (document.getElementById('health-assistant-fab')) return;
@@ -940,7 +1125,7 @@ async function performMemoAutoClean(daysToKeep) {
     fab.innerText = '🍀';
     document.body.appendChild(fab);
 
-    // 拖动逻辑（适配手机端）
+    // 拖动逻辑
     function enableDrag(element) {
       let isDragging = false;
       let currentX;
@@ -950,7 +1135,6 @@ async function performMemoAutoClean(daysToKeep) {
       let xOffset = 0;
       let yOffset = 0;
 
-      // 恢复保存的位置
       const savedPosition = localStorage.getItem('health-assistant-fab-position');
       if (savedPosition) {
         const { x, y } = JSON.parse(savedPosition);
@@ -983,7 +1167,6 @@ async function performMemoAutoClean(daysToKeep) {
         isDragging = false;
         element.style.cursor = 'grab';
 
-        // 保存位置
         const rect = element.getBoundingClientRect();
         localStorage.setItem('health-assistant-fab-position', JSON.stringify({
           x: rect.left,
@@ -1007,21 +1190,17 @@ async function performMemoAutoClean(daysToKeep) {
         xOffset = currentX;
         yOffset = currentY;
 
-        // 计算新位置
         let newLeft = currentX;
         let newTop = currentY;
 
-        // 获取窗口尺寸和元素尺寸
         const windowWidth = window.innerWidth;
         const windowHeight = window.innerHeight;
         const elementWidth = element.offsetWidth;
         const elementHeight = element.offsetHeight;
 
-        // 限制在窗口内
         newLeft = Math.max(0, Math.min(newLeft, windowWidth - elementWidth));
         newTop = Math.max(0, Math.min(newTop, windowHeight - elementHeight));
 
-        // 设置位置
         element.style.left = `${newLeft}px`;
         element.style.top = `${newTop}px`;
         element.style.right = 'auto';
@@ -1029,17 +1208,14 @@ async function performMemoAutoClean(daysToKeep) {
         element.style.transform = "translate(0, 0)";
       }
 
-      // 鼠标事件
       element.addEventListener('mousedown', dragStart);
       document.addEventListener('mousemove', drag);
       document.addEventListener('mouseup', dragEnd);
 
-      // 触摸事件
       element.addEventListener('touchstart', dragStart, { passive: false });
       document.addEventListener('touchmove', drag, { passive: false });
       document.addEventListener('touchend', dragEnd);
 
-      // 防止点击时触发拖动
       element.addEventListener('click', (e) => {
         if (xOffset !== 0 || yOffset !== 0) {
           e.stopPropagation();
@@ -1048,7 +1224,6 @@ async function performMemoAutoClean(daysToKeep) {
         }
       });
 
-      // 窗口大小改变时，确保按钮在可视区域内
       window.addEventListener('resize', () => {
         const rect = element.getBoundingClientRect();
         const windowWidth = window.innerWidth;
@@ -1057,7 +1232,6 @@ async function performMemoAutoClean(daysToKeep) {
         let newLeft = rect.left;
         let newTop = rect.top;
         
-        // 调整位置确保在窗口内
         newLeft = Math.max(0, Math.min(newLeft, windowWidth - element.offsetWidth));
         newTop = Math.max(0, Math.min(newTop, windowHeight - element.offsetHeight));
         
@@ -1066,7 +1240,6 @@ async function performMemoAutoClean(daysToKeep) {
       });
     }
 
-    // 启用拖动
     enableDrag(fab);
 
     const panel = document.createElement('div');
@@ -1092,7 +1265,9 @@ async function performMemoAutoClean(daysToKeep) {
         <div class="ha-btn" data-key="todo">待办事项</div>
         <div class="ha-btn" data-key="pomodoro">专注番茄</div>
         <div class="ha-btn" data-key="memo">随笔备忘</div>
+        <div class="ha-btn" data-key="reviews">生活测评</div>
         <div class="ha-btn" data-key="bgm">背景音乐</div>
+        <div class="ha-btn" data-key="theme">主题背景</div>
         <div class="ha-btn" data-key="apiconf">独立API</div>
         <div class="ha-btn" data-key="clearbook">清除数据</div>
       </div>
@@ -1130,6 +1305,250 @@ async function performMemoAutoClean(daysToKeep) {
 
     // 打开各主面板
     const content = panel.querySelector('#ha-content-area');
+
+    // 应用已保存的主题（背景图和颜色）
+    function applyTheme() {
+      const theme = ctx.extensionSettings[MODULE_NAME].theme;
+      
+      // 主面板背景图
+      if (theme.mainBackground) {
+        panel.style.backgroundImage = `url(${theme.mainBackground})`;
+        panel.style.backgroundSize = 'cover';
+        panel.style.backgroundPosition = 'center';
+        panel.style.backgroundRepeat = 'no-repeat';
+      }
+      
+      // 主面板颜色
+      if (theme.mainColor) {
+        panel.style.backgroundColor = theme.mainColor;
+      }
+      
+      // 子面板背景图
+      if (theme.subpanelBackground) {
+        content.style.backgroundImage = `url(${theme.subpanelBackground})`;
+        content.style.backgroundSize = 'cover';
+        content.style.backgroundPosition = 'center';
+        content.style.backgroundRepeat = 'no-repeat';
+      }
+      
+      // 子面板颜色
+      if (theme.subpanelColor) {
+        content.style.backgroundColor = theme.subpanelColor;
+      }
+      
+      // 按钮颜色
+      if (theme.buttonColor) {
+        const buttons = document.querySelectorAll('.ha-btn');
+        buttons.forEach(btn => {
+          btn.style.backgroundColor = theme.buttonColor;
+        });
+      }
+    }
+    applyTheme();
+
+    // 主题背景功能
+    function showTheme() {
+      content.style.display = 'block';
+      content.innerHTML = `
+        <div style="font-weight:600;margin-bottom:12px;border-bottom:1px solid #eee;padding-bottom:8px;">主题背景</div>
+        
+        <div style="margin-bottom:16px;">
+          <div style="font-size:13px;color:#666;margin-bottom:8px;">整体背景：</div>
+          <div style="display:flex;gap:8px;">
+            <button id="upload-main-bg" class="ha-btn" style="flex:1;padding:8px;">上传整体背景</button>
+            <button id="clear-main-bg" class="ha-btn" style="flex:1;padding:8px;">清除整体背景</button>
+          </div>
+          <input id="main-bg-file" type="file" accept="image/*" style="display:none;">
+        </div>
+        
+        <div style="margin-bottom:16px;">
+          <div style="font-size:13px;color:#666;margin-bottom:8px;">子面板背景：</div>
+          <div style="display:flex;gap:8px;">
+            <button id="upload-sub-bg" class="ha-btn" style="flex:1;padding:8px;">上传子面板背景</button>
+            <button id="clear-sub-bg" class="ha-btn" style="flex:1;padding:8px;">清除子面板背景</button>
+          </div>
+          <input id="sub-bg-file" type="file" accept="image/*" style="display:none;">
+        </div>
+        
+        <div style="margin-bottom:16px;">
+          <div style="font-size:13px;color:#666;margin-bottom:8px;">主面板调色：</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="main-color-picker" type="color" style="width:50px;height:35px;border:none;cursor:pointer;">
+            <button id="apply-main-color" class="ha-btn" style="flex:1;padding:8px;">主面板调色</button>
+            <button id="reset-main-color" class="ha-btn" style="flex:1;padding:8px;">重置</button>
+          </div>
+        </div>
+        
+        <div style="margin-bottom:16px;">
+          <div style="font-size:13px;color:#666;margin-bottom:8px;">子面板调色：</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="sub-color-picker" type="color" style="width:50px;height:35px;border:none;cursor:pointer;">
+            <button id="apply-sub-color" class="ha-btn" style="flex:1;padding:8px;">子面板调色</button>
+            <button id="reset-sub-color" class="ha-btn" style="flex:1;padding:8px;">重置</button>
+          </div>
+        </div>
+        
+        <div style="margin-bottom:16px;">
+          <div style="font-size:13px;color:#666;margin-bottom:8px;">主按钮配色：</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="button-color-picker" type="color" style="width:50px;height:35px;border:none;cursor:pointer;">
+            <button id="apply-button-color" class="ha-btn" style="flex:1;padding:8px;">主按钮配色</button>
+            <button id="reset-button-color" class="ha-btn" style="flex:1;padding:8px;">重置</button>
+          </div>
+        </div>
+        
+        <div style="margin-top:16px;padding:12px;background:#f9f9f9;border-radius:6px;font-size:12px;color:#666;">
+          提示：上传的图片会被转换为base64格式保存，建议使用压缩过的图片以避免占用过多空间
+        </div>
+      `;
+
+      const theme = ctx.extensionSettings[MODULE_NAME].theme;
+
+      // 整体背景
+      const uploadMainBtn = document.getElementById('upload-main-bg');
+      const clearMainBtn = document.getElementById('clear-main-bg');
+      const mainBgFile = document.getElementById('main-bg-file');
+      
+      uploadMainBtn.onclick = () => mainBgFile.click();
+      mainBgFile.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+          toastr.error('请选择图片文件');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          ctx.extensionSettings[MODULE_NAME].theme.mainBackground = event.target.result;
+          panel.style.backgroundImage = `url(${event.target.result})`;
+          panel.style.backgroundSize = 'cover';
+          panel.style.backgroundPosition = 'center';
+          panel.style.backgroundRepeat = 'no-repeat';
+          saveSettings();
+          toastr.success('整体背景已设置');
+        };
+        reader.readAsDataURL(file);
+      };
+
+      clearMainBtn.onclick = () => {
+        ctx.extensionSettings[MODULE_NAME].theme.mainBackground = null;
+        panel.style.backgroundImage = '';
+        saveSettings();
+        toastr.success('整体背景已清除');
+      };
+
+      // 子面板背景
+      const uploadSubBtn = document.getElementById('upload-sub-bg');
+      const clearSubBtn = document.getElementById('clear-sub-bg');
+      const subBgFile = document.getElementById('sub-bg-file');
+      
+      uploadSubBtn.onclick = () => subBgFile.click();
+      subBgFile.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+          toastr.error('请选择图片文件');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          ctx.extensionSettings[MODULE_NAME].theme.subpanelBackground = event.target.result;
+          content.style.backgroundImage = `url(${event.target.result})`;
+          content.style.backgroundSize = 'cover';
+          content.style.backgroundPosition = 'center';
+          content.style.backgroundRepeat = 'no-repeat';
+          saveSettings();
+          toastr.success('子面板背景已设置');
+        };
+        reader.readAsDataURL(file);
+      };
+
+      clearSubBtn.onclick = () => {
+        ctx.extensionSettings[MODULE_NAME].theme.subpanelBackground = null;
+        content.style.backgroundImage = '';
+        saveSettings();
+        toastr.success('子面板背景已清除');
+      };
+
+      // 主面板调色
+      const mainColorPicker = document.getElementById('main-color-picker');
+      const applyMainColor = document.getElementById('apply-main-color');
+      const resetMainColor = document.getElementById('reset-main-color');
+      
+      if (theme.mainColor) {
+        mainColorPicker.value = theme.mainColor;
+      }
+      
+      applyMainColor.onclick = () => {
+        const color = mainColorPicker.value;
+        ctx.extensionSettings[MODULE_NAME].theme.mainColor = color;
+        panel.style.backgroundColor = color;
+        saveSettings();
+        toastr.success('主面板颜色已设置');
+      };
+      
+      resetMainColor.onclick = () => {
+        ctx.extensionSettings[MODULE_NAME].theme.mainColor = null;
+        panel.style.backgroundColor = '';
+        saveSettings();
+        toastr.success('主面板颜色已重置');
+      };
+
+      // 子面板调色
+      const subColorPicker = document.getElementById('sub-color-picker');
+      const applySubColor = document.getElementById('apply-sub-color');
+      const resetSubColor = document.getElementById('reset-sub-color');
+      
+      if (theme.subpanelColor) {
+        subColorPicker.value = theme.subpanelColor;
+      }
+      
+      applySubColor.onclick = () => {
+        const color = subColorPicker.value;
+        ctx.extensionSettings[MODULE_NAME].theme.subpanelColor = color;
+        content.style.backgroundColor = color;
+        saveSettings();
+        toastr.success('子面板颜色已设置');
+      };
+      
+      resetSubColor.onclick = () => {
+        ctx.extensionSettings[MODULE_NAME].theme.subpanelColor = null;
+        content.style.backgroundColor = '';
+        saveSettings();
+        toastr.success('子面板颜色已重置');
+      };
+
+      // 主按钮配色
+      const buttonColorPicker = document.getElementById('button-color-picker');
+      const applyButtonColor = document.getElementById('apply-button-color');
+      const resetButtonColor = document.getElementById('reset-button-color');
+      
+      if (theme.buttonColor) {
+        buttonColorPicker.value = theme.buttonColor;
+      }
+      
+      applyButtonColor.onclick = () => {
+        const color = buttonColorPicker.value;
+        ctx.extensionSettings[MODULE_NAME].theme.buttonColor = color;
+        const buttons = document.querySelectorAll('.ha-btn');
+        buttons.forEach(btn => {
+          btn.style.backgroundColor = color;
+        });
+        saveSettings();
+        toastr.success('按钮颜色已设置');
+      };
+      
+      resetButtonColor.onclick = () => {
+        ctx.extensionSettings[MODULE_NAME].theme.buttonColor = null;
+        const buttons = document.querySelectorAll('.ha-btn');
+        buttons.forEach(btn => {
+          btn.style.backgroundColor = '';
+        });
+        saveSettings();
+        toastr.success('按钮颜色已重置');
+      };
+    }
+
     panel.querySelectorAll('.ha-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const key = btn.dataset.key;
@@ -1144,13 +1563,18 @@ async function performMemoAutoClean(daysToKeep) {
         else if (key === 'todo') showTodo();
         else if (key === 'pomodoro') showPomodoro();
         else if (key === 'memo') showMemo();
+        else if (key === 'reviews') showReviews();
         else if (key === 'bgm') showBgm();
+        else if (key === 'theme') showTheme();
         else if (key === 'clearbook') showClearBook();
         else if (key === 'apiconf') showApiConfig();
       });
     });
 
- 
+      // --------- 各模块内容，showPomodoro,showTodo等 ----------
+
+      // --------- 各模块内容，showPomodoro,showTodo等 ----------
+
 
       // --------- 各模块内容（最小实现） ----------
 async function showWardrobe() {
@@ -1898,8 +2322,20 @@ if (addTagBtn) {
   // 初始显示上衣
   renderPanel('top');
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
       
-// 专注番茄钟模块 v3 - 后台计时版本 + 系统通知
 async function showPomodoro() {
   try {
     const cs = window.getComputedStyle(content);
@@ -1908,49 +2344,129 @@ async function showPomodoro() {
 
   content.style.display = 'block';
   content.innerHTML = `
-    <div style="font-weight:600;margin-bottom:8px">专注番茄钟</div>
-    
-    <!-- 第一行：时间输入 + 音乐控制 -->
-    <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;flex-wrap:wrap;">
-      <input id="pom-time-input" type="number" placeholder="分钟" min="0" max="120" value=""
-             style="width:60px;padding:4px;">
-      <button id="pom-time-add" class="ha-btn" style="padding:4px 8px;">➕</button>
-      <button id="pom-time-del" class="ha-btn" style="padding:4px 8px;">🗑️</button>
-      <button id="pom-bgm-play" class="ha-btn" style="padding:4px 8px;">🎵</button>
-      <button id="pom-bgm-next" class="ha-btn" style="padding:4px 8px;">⏯️</button>
-      <input id="pom-bgm-volume" type="range" min="0" max="100" value="30"
-             style="width:60px;cursor:pointer;">
+    <style>
+      @keyframes gradient-shift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
       
+      /* 番茄钟BGM音量滑条灰色样式 */
+      #pom-bgm-volume, #pom-bgm-volume-popup {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        background: transparent !important;
+      }
+      
+      /* 滑条轨道 - WebKit */
+      #pom-bgm-volume::-webkit-slider-runnable-track,
+      #pom-bgm-volume-popup::-webkit-slider-runnable-track {
+        width: 100% !important;
+        height: 6px !important;
+        background: #ddd !important;
+        border-radius: 3px !important;
+        cursor: pointer !important;
+      }
+      
+      /* 滑条轨道 - Firefox */
+      #pom-bgm-volume::-moz-range-track,
+      #pom-bgm-volume-popup::-moz-range-track {
+        width: 100% !important;
+        height: 6px !important;
+        background: #ddd !important;
+        border-radius: 3px !important;
+        cursor: pointer !important;
+      }
+      
+      /* 滑块 - WebKit */
+      #pom-bgm-volume::-webkit-slider-thumb,
+      #pom-bgm-volume-popup::-webkit-slider-thumb {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        width: 14px !important;
+        height: 14px !important;
+        background: #888 !important;
+        border-radius: 50% !important;
+        cursor: pointer !important;
+        border: 2px solid #666 !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+        margin-top: -4px !important;
+      }
+      
+      /* 滑块 - Firefox */
+      #pom-bgm-volume::-moz-range-thumb,
+      #pom-bgm-volume-popup::-moz-range-thumb {
+        width: 14px !important;
+        height: 14px !important;
+        background: #888 !important;
+        border-radius: 50% !important;
+        cursor: pointer !important;
+        border: 2px solid #666 !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+      }
+      
+      /* 滑块悬停效果 */
+      #pom-bgm-volume::-webkit-slider-thumb:hover,
+      #pom-bgm-volume-popup::-webkit-slider-thumb:hover {
+        background: #666 !important;
+        transform: scale(1.1) !important;
+      }
+      
+      #pom-bgm-volume::-moz-range-thumb:hover,
+      #pom-bgm-volume-popup::-moz-range-thumb:hover {
+        background: #666 !important;
+        transform: scale(1.1) !important;
+      }
+      
+      /* 折叠面板样式 */
+      .pom-collapse-panel {
+        display: none;
+        margin-top: 8px;
+        padding: 8px;
+        background: #f9f9f9;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+      }
+      .pom-collapse-panel.active {
+        display: block;
+      }
+    </style>
+    
+    <!-- 标题行 -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;border-bottom:1px solid #eee;padding-bottom:8px;">
+      <div style="font-weight:600;">专注番茄钟</div>
+      <div style="display:flex;gap:8px;">
+        <button id="pom-settings-btn" class="ha-btn" style="padding:4px 8px;">⚙️</button>
+        <button id="pom-time-panel-btn" class="ha-btn" style="padding:4px 8px;">时间</button>
+        <button id="pom-tag-panel-btn" class="ha-btn" style="padding:4px 8px;">标签</button>
+      </div>
+    </div>
+    
+    <!-- 标题和待办/习惯 -->
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:stretch;">
+      <input id="pom-title-input" type="text" placeholder="专注标题（可留空）"
+             style="flex:1;padding:6px;min-width:0;">
+      <button id="pom-todo-btn" class="ha-btn" style="padding:6px 16px;white-space:nowrap;">待办</button>
+      <button id="pom-habit-btn" class="ha-btn" style="padding:6px 16px;white-space:nowrap;">习惯</button>
     </div>
     
     <!-- 时间块显示区 -->
-    <div id="pom-time-blocks" style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:4px;min-height:24px;"></div>
-    
-    <!-- 第二行：标题和待办/习惯 -->
-    <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
-      <input id="pom-title-input" type="text" placeholder="专注标题（可留空）"
-             style="width:180px;padding:4px;">
-      <button id="pom-todo-btn" class="ha-btn">待办</button>
-      <button id="pom-habit-btn" class="ha-btn">习惯</button>
+    <div style="margin-bottom:8px;display:flex;align-items:flex-start;gap:8px;">
+      <div style="font-size:13px;color:#666;white-space:nowrap;padding-top:2px;">时间:</div>
+      <div id="pom-time-blocks" style="display:flex;flex-wrap:wrap;gap:4px;min-height:24px;flex:1;"></div>
     </div>
     
-    <!-- 第三行：标签管理 -->
-    <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;">
-      <input id="pom-tag-input" type="text" placeholder="标签"
-             style="width:120px;padding:4px;">
-      <button id="pom-tag-add" class="ha-btn" style="padding:4px 8px;">➕</button>
-      <button id="pom-tag-del" class="ha-btn" style="padding:4px 8px;">🗑️</button>
-      <button id="pom-notify-btn" class="ha-btn" style="padding:4px 8px;">🔔</button>
+    <!-- 标签块显示区 -->
+    <div style="margin-bottom:8px;display:flex;align-items:flex-start;gap:8px;">
+      <div style="font-size:13px;color:#666;white-space:nowrap;padding-top:2px;">标签:</div>
+      <div id="pom-tag-blocks" style="display:flex;flex-wrap:wrap;gap:4px;min-height:24px;flex:1;"></div>
     </div>
     
-    <!-- 标签显示区 -->
-    <div id="pom-tag-blocks" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;min-height:24px;"></div>
-    
-    <!-- 第四行：操作按钮 -->
-    <div style="display:flex;gap:4px;margin-bottom:8px;">
-      <button id="pom-start-btn" class="ha-btn" style="flex:1;">开始</button>
-      <button id="pom-stats-btn" class="ha-btn" style="flex:1;">统计</button>
-      <button id="pom-delete-btn" class="ha-btn" style="flex:1;">删除</button>
+    <!-- 操作按钮 -->
+    <div style="display:flex;gap:4px;">
+      <button id="pom-stats-btn" class="ha-btn" style="flex:1;padding:10px;">统计</button>
+      <button id="pom-start-btn" class="ha-btn" style="flex:2;padding:10px;background:linear-gradient(45deg, #FF6B6B, #4ECDC4, #45B7D1, #96CEB4, #FFEAA7, #DFE6E9);background-size:300% 300%;animation:gradient-shift 3s ease infinite;font-weight:600;">开始</button>
+      <button id="pom-delete-btn" class="ha-btn" style="flex:1;padding:10px;">删除</button>
     </div>
   `;
 
@@ -1965,6 +2481,7 @@ async function showPomodoro() {
       session: null,
       tagDeleteMode: false,
       timeDeleteMode: false,
+      backgroundImage: null,
       notifyConfig: {
         vibrate: true,
         ring: true,
@@ -2031,12 +2548,25 @@ async function showPomodoro() {
       }
 
       if (todoUID) {
-        const todos = ctx.extensionSettings[MODULE_NAME].todo || [];
+        const todos = ctx.extensionSettings[MODULE_NAME].todos || [];
         const arr = todos.map((t, i) => {
           const due = t.due ? `截止:${t.due}` : '';
           const status = t.done ? '完成' : (t.due && new Date() > new Date(t.due) ? '过期' : '进行中');
           const focused = t.focused ? `已专注:${Math.floor(t.focused / 60)}分钟` : '';
-          return `${i+1}. [${status}] ${t.name} 优先:${t.priority} 标签:${t.tag} ${due} ${focused}`;
+          
+          // 添加循环信息
+          let recurrence = '';
+          if (t.recurrence) {
+            if (t.recurrence.type === 'weekly') {
+              const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+              const dayNames = t.recurrence.days.map(d => '周' + weekDays[d]).join(',');
+              recurrence = `[🔁每周${dayNames} ${t.recurrence.time}]`;
+            } else if (t.recurrence.type === 'monthly') {
+              recurrence = `[🔁每月${t.recurrence.date}号 ${t.recurrence.time}]`;
+            }
+          }
+          
+          return `${i+1}. [${status}] ${t.name} 优先:${t.priority} 标签:${t.tag} ${due} ${recurrence} ${focused}`;
         });
         const newContent = arr.join('\n');
         await globalThis.SillyTavern.getContext()
@@ -2052,6 +2582,7 @@ async function showPomodoro() {
   let bgmAudio = null;
   let bgmIsPlaying = false;
   let currentBgmIndex = 0;
+  let currentPopupDialog = null; // 追踪当前打开的弹窗
   
   const bgmList = [
     { name: '雨声', url: '/scripts/extensions/third-party/healthy-life-helper/BGM/1_雨声.mp3' },
@@ -2171,8 +2702,14 @@ async function showPomodoro() {
     let backgroundTimer = null;
 
     const sessionDialog = document.createElement('div');
+    
+    // 准备背景样式
+    const backgroundStyle = pm.backgroundImage 
+      ? `background-image:url(${pm.backgroundImage});background-size:cover;background-position:center;background-repeat:no-repeat;` 
+      : '';
+    
     sessionDialog.innerHTML = `
-      <div style="background:#fff;padding:16px;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,0.2);max-height:300px;width:320px;margin:auto;">
+      <div style="background:#fff;padding:16px;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,0.2);max-height:300px;width:320px;margin:auto;${backgroundStyle}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <div style="font-size:14px;color:#666;" id="session-timeinfo">已用时长 / 剩余时长</div>
           <button id="session-close" class="ha-btn" style="padding:2px 6px;font-size:12px;">×</button>
@@ -2199,6 +2736,13 @@ async function showPomodoro() {
       alignItems: 'center',
       justifyContent: 'center'
     });
+    
+    // 关闭之前的弹窗
+    if (currentPopupDialog) {
+      currentPopupDialog.remove();
+    }
+    currentPopupDialog = sessionDialog;
+    
     content.appendChild(sessionDialog);
 
     const timerDisplay = sessionDialog.querySelector('#session-timer');
@@ -2234,7 +2778,7 @@ async function showPomodoro() {
       const tags = tagIdx !== null ? [pm.tagBlocks[tagIdx]] : [];
 
       let source = 'custom';
-      const todos = ctx.extensionSettings[MODULE_NAME].todo || [];
+      const todos = ctx.extensionSettings[MODULE_NAME].todos || [];
       const social = ctx.extensionSettings[MODULE_NAME].social || {};
 
       let matchedTodoIdx = -1;
@@ -2284,6 +2828,7 @@ async function showPomodoro() {
       await triggerSystemNotification();
 
       sessionDialog.remove();
+      currentPopupDialog = null;
       toastr.success('番茄钟已完成！');
     }
 
@@ -2321,6 +2866,7 @@ async function showPomodoro() {
       isComplete = true;
       if (backgroundTimer) clearInterval(backgroundTimer);
       sessionDialog.remove();
+      currentPopupDialog = null;
       toastr.warning('已取消本次专注');
     };
   }
@@ -2335,15 +2881,19 @@ async function showPomodoro() {
       const label = mins === 0 ? '正计时' : `${mins}分`;
       div.innerText = label;
       div.style.cssText = `
-        padding:2px 8px;
-        border-radius:12px;
+        padding:3px 10px;
+        border-radius:14px;
         cursor:pointer;
-        background:${isActive ? '#4CAF50' : '#e0e0e0'};
-        color:${isActive ? '#fff' : '#333'};
-        font-weight:400;
+        background:${isActive ? 'rgba(76, 175, 80, 0.5)' : 'rgba(255, 255, 255, 0.5)'};
+        backdrop-filter:blur(10px);
+        -webkit-backdrop-filter:blur(10px);
+        color:${isActive ? '#2e7d32' : '#333'};
+        font-weight:${isActive ? '600' : '400'};
         user-select:none;
-        border:2px solid ${isActive ? '#45a049' : '#ccc'};
-        font-size:14px;
+        border:1.5px solid ${isActive ? 'rgba(76, 175, 80, 0.6)' : 'rgba(200, 200, 200, 0.5)'};
+        box-shadow:${isActive ? '0 2px 8px rgba(76, 175, 80, 0.3)' : '0 2px 6px rgba(0, 0, 0, 0.1)'};
+        font-size:13px;
+        transition:all 0.3s ease;
       `;
       
       if (pm.timeDeleteMode) {
@@ -2373,15 +2923,19 @@ async function showPomodoro() {
       const isActive = pm.selectedTag === idx;
       div.innerText = tag;
       div.style.cssText = `
-        padding:2px 8px;
-        border-radius:12px;
+        padding:3px 10px;
+        border-radius:14px;
         cursor:pointer;
-        user-select:none;background:${isActive ? '#2196F3' : '#e8e8e8'};
-        color:${isActive ? '#fff' : '#333'};
-        font-weight:400;
+        background:${isActive ? 'rgba(33, 150, 243, 0.5)' : 'rgba(255, 255, 255, 0.5)'};
+        backdrop-filter:blur(10px);
+        -webkit-backdrop-filter:blur(10px);
+        color:${isActive ? '#1565c0' : '#333'};
+        font-weight:${isActive ? '600' : '400'};
         user-select:none;
-        border:2px solid ${isActive ? '#1976D2' : '#ccc'};
-        font-size:14px;
+        border:1.5px solid ${isActive ? 'rgba(33, 150, 243, 0.6)' : 'rgba(200, 200, 200, 0.5)'};
+        box-shadow:${isActive ? '0 2px 8px rgba(33, 150, 243, 0.3)' : '0 2px 6px rgba(0, 0, 0, 0.1)'};
+        font-size:13px;
+        transition:all 0.3s ease;
       `;
       
       if (pm.tagDeleteMode) {
@@ -2403,16 +2957,20 @@ async function showPomodoro() {
     });
   }
 
-  // ====== 待办弹窗 ======
+  // ====== 待办弹窗（已适配循环待办） ======
   function showTodoPopup() {
-    const todos = ctx.extensionSettings[MODULE_NAME].todo || [];
+    const todos = ctx.extensionSettings[MODULE_NAME].todos || [];
     const now = new Date();
-    const activeTodos = todos.filter(t => !t.done && (!t.due || new Date(t.due) >= now));
-    const expiredTodos = todos.filter(t => !t.done && t.due && new Date(t.due) < now);
-    const allTodos = [...activeTodos, ...expiredTodos];
+    
+    // 过滤待办：包括未完成的普通待办 + 所有循环待办（不论是否完成）
+    const normalTodos = todos.filter(t => !t.done && !t.recurrence && (!t.due || new Date(t.due) >= now));
+    const expiredTodos = todos.filter(t => !t.done && !t.recurrence && t.due && new Date(t.due) < now);
+    const recurrentTodos = todos.filter(t => t.recurrence !== null); // 所有循环待办都显示
+    
+    const allTodos = [...normalTodos, ...expiredTodos, ...recurrentTodos];
 
     if (allTodos.length === 0) {
-      toastr.warning('暂无进行中或过期的待办');
+      toastr.warning('暂无可用待办');
       return;
     }
 
@@ -2435,6 +2993,13 @@ async function showPomodoro() {
       alignItems: 'center',
       justifyContent: 'center'
     });
+    
+    // 关闭之前的弹窗
+    if (currentPopupDialog) {
+      currentPopupDialog.remove();
+    }
+    currentPopupDialog = dialog;
+    
     content.appendChild(dialog);
 
     const listEl = dialog.querySelector('#popup-list');
@@ -2446,19 +3011,40 @@ async function showPomodoro() {
         background:#f5f5f5;
         border-radius:3px;
         cursor:pointer;
-        border-left:3px solid ${todo.done ? '#4CAF50' : '#ff9800'};
+        border-left:3px solid ${todo.done ? '#4CAF50' : (todo.recurrence ? '#2196F3' : '#ff9800')};
       `;
-      const dueText = todo.due ? ` (${todo.due.split('T')[0]})` : '';
-      div.innerText = `${todo.name}${dueText}`;
+      
+      // 构建显示文本
+      let displayText = todo.name;
+      
+      if (todo.recurrence) {
+        // 循环待办显示循环信息
+        if (todo.recurrence.type === 'weekly') {
+          const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+          const dayNames = todo.recurrence.days.map(d => '周' + weekDays[d]).join(',');
+          displayText += ` 🔁${dayNames} ${todo.recurrence.time}`;
+        } else if (todo.recurrence.type === 'monthly') {
+          displayText += ` 🔁每月${todo.recurrence.date}号 ${todo.recurrence.time}`;
+        }
+      } else if (todo.due) {
+        // 普通待办显示截止时间
+        displayText += ` (${todo.due.split('T')[0]})`;
+      }
+      
+      div.innerText = displayText;
       div.onclick = () => {
         document.getElementById('pom-title-input').value = todo.name;
         dialog.remove();
+        currentPopupDialog = null;
         toastr.success(`已注入待办: ${todo.name}`);
       };
       listEl.appendChild(div);
     });
 
-    dialog.querySelector('#popup-close').onclick = () => dialog.remove();
+    dialog.querySelector('#popup-close').onclick = () => {
+      dialog.remove();
+      currentPopupDialog = null;
+    };
   }
 
   // ====== 习惯弹窗 ======
@@ -2490,6 +3076,13 @@ async function showPomodoro() {
       alignItems: 'center',
       justifyContent: 'center'
     });
+    
+    // 关闭之前的弹窗
+    if (currentPopupDialog) {
+      currentPopupDialog.remove();
+    }
+    currentPopupDialog = dialog;
+    
     content.appendChild(dialog);
 
     const listEl = dialog.querySelector('#popup-list');
@@ -2507,12 +3100,16 @@ async function showPomodoro() {
       div.onclick = () => {
         document.getElementById('pom-title-input').value = habit.name;
         dialog.remove();
+        currentPopupDialog = null;
         toastr.success(`已注入习惯: ${habit.name}`);
       };
       listEl.appendChild(div);
     });
 
-    dialog.querySelector('#popup-close').onclick = () => dialog.remove();
+    dialog.querySelector('#popup-close').onclick = () => {
+      dialog.remove();
+      currentPopupDialog = null;
+    };
   }
 
   // ====== 通知配置弹窗 ======
@@ -2554,6 +3151,13 @@ async function showPomodoro() {
       alignItems: 'center',
       justifyContent: 'center'
     });
+    
+    // 关闭之前的弹窗
+    if (currentPopupDialog) {
+      currentPopupDialog.remove();
+    }
+    currentPopupDialog = dialog;
+    
     content.appendChild(dialog);
 
     dialog.querySelector('#notify-ok').onclick = () => {
@@ -2562,9 +3166,281 @@ async function showPomodoro() {
       cfg.ringUrl = dialog.querySelector('#ring-url-input').value;
       saveSettings();
       dialog.remove();
+      currentPopupDialog = null;
       toastr.success('通知设置已保存');
     };
-    dialog.querySelector('#popup-close').onclick = () => dialog.remove();
+    dialog.querySelector('#popup-close').onclick = () => {
+      dialog.remove();
+      currentPopupDialog = null;
+    };
+  }
+
+  // ====== 设置弹窗（白噪音 & 背景） ======
+  function showSettingsPopup() {
+    const dialog = document.createElement('div');
+    dialog.innerHTML = `
+      <div style="background:#fff;padding:12px;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,0.2);width:280px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-weight:600;">
+          <span>白噪音 & 设置</span>
+          <button id="popup-close" class="ha-btn" style="padding:2px 6px;font-size:12px;">×</button>
+        </div>
+        <div style="margin-bottom:8px;">
+          <div style="font-size:13px;color:#666;margin-bottom:4px;">白噪音控制：</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center;flex-wrap:wrap;">
+            <button id="pom-bgm-play-popup" class="ha-btn" style="padding:4px 8px;">🎵</button>
+            <button id="pom-bgm-next-popup" class="ha-btn" style="padding:4px 8px;">⏯️</button>
+            <input id="pom-bgm-volume-popup" type="range" min="0" max="100" value="30"
+                   style="width:100px;cursor:pointer;">
+          </div>
+        </div>
+        <div style="margin-bottom:8px;">
+          <div style="font-size:13px;color:#666;margin-bottom:4px;">通知设置：</div>
+          <button id="pom-notify-btn-popup" class="ha-btn" style="padding:4px 8px;width:100%;">🔔 通知配置</button>
+        </div>
+        <div style="margin-bottom:8px;">
+          <div style="font-size:13px;color:#666;margin-bottom:4px;">专注背景：</div>
+          <div style="display:flex;gap:4px;">
+            <button id="pom-bg-btn-popup" class="ha-btn" style="padding:4px 8px;flex:1;">上传专注背景</button>
+            <button id="pom-bg-clear-popup" class="ha-btn" style="padding:4px 8px;flex:1;">清除背景</button>
+          </div>
+          <input id="pom-bg-upload-popup" type="file" accept="image/*" style="display:none;">
+        </div>
+      </div>`;
+    Object.assign(dialog.style, {
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      zIndex: 99999,
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center'
+    });
+    
+    // 关闭之前的弹窗
+    if (currentPopupDialog) {
+      currentPopupDialog.remove();
+    }
+    currentPopupDialog = dialog;
+    
+    content.appendChild(dialog);
+
+    // BGM控制
+    const bgmPlayBtn = dialog.querySelector('#pom-bgm-play-popup');
+    const bgmNextBtn = dialog.querySelector('#pom-bgm-next-popup');
+    const bgmVolume = dialog.querySelector('#pom-bgm-volume-popup');
+    
+    bgmVolume.value = bgmAudio ? bgmAudio.volume * 100 : 30;
+    bgmPlayBtn.innerText = bgmIsPlaying ? '⏸️' : '🎵';
+    
+    bgmPlayBtn.onclick = playBgm;
+    bgmNextBtn.onclick = nextBgm;
+    bgmVolume.oninput = (e) => {
+      if (bgmAudio) bgmAudio.volume = e.target.value / 100;
+    };
+
+    // 通知配置
+    dialog.querySelector('#pom-notify-btn-popup').onclick = () => {
+      dialog.remove();
+      currentPopupDialog = null;
+      showNotifyConfig();
+    };
+
+    // 背景图片
+    dialog.querySelector('#pom-bg-btn-popup').onclick = () => {
+      dialog.querySelector('#pom-bg-upload-popup').click();
+    };
+
+    dialog.querySelector('#pom-bg-upload-popup').onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        toastr.error('请选择图片文件');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        pm.backgroundImage = event.target.result;
+        saveSettings();
+        toastr.success('专注背景已设置');
+        dialog.remove();
+        currentPopupDialog = null;
+      };
+      reader.readAsDataURL(file);
+    };
+
+    dialog.querySelector('#pom-bg-clear-popup').onclick = () => {
+      pm.backgroundImage = null;
+      saveSettings();
+      toastr.success('专注背景已清除');
+      dialog.remove();
+      currentPopupDialog = null;
+    };
+
+    dialog.querySelector('#popup-close').onclick = () => {
+      dialog.remove();
+      currentPopupDialog = null;
+    };
+  }
+
+  // ====== 时间管理弹窗 ======
+  function showTimeManagePopup() {
+    const dialog = document.createElement('div');
+    dialog.innerHTML = `
+      <div style="background:#fff;padding:12px;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,0.2);width:280px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-weight:600;">
+          <span>时间管理</span>
+          <button id="popup-close" class="ha-btn" style="padding:2px 6px;font-size:12px;">×</button>
+        </div>
+        <div style="margin-bottom:8px;">
+          <div style="font-size:13px;color:#666;margin-bottom:4px;">添加时间块：</div>
+          <div style="display:flex;gap:4px;margin-bottom:4px;align-items:center;">
+            <input id="pom-time-input-popup" type="number" placeholder="分钟" min="0" max="120" value=""
+                   style="flex:1;padding:6px;font-size:13px;">
+            <button id="pom-time-add-popup" class="ha-btn" style="padding:6px 12px;">➕</button>
+          </div>
+          <div style="font-size:12px;color:#999;">输入0表示正计时，输入1-120表示倒计时</div>
+        </div>
+        <div>
+          <div style="font-size:13px;color:#666;margin-bottom:4px;">删除时间块：</div>
+          <button id="pom-time-del-popup" class="ha-btn" style="padding:6px 12px;width:100%;">🗑️ 删除模式</button>
+        </div>
+      </div>`;
+    Object.assign(dialog.style, {
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      zIndex: 99999,
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center'
+    });
+    
+    // 关闭之前的弹窗
+    if (currentPopupDialog) {
+      currentPopupDialog.remove();
+    }
+    currentPopupDialog = dialog;
+    
+    content.appendChild(dialog);
+
+    const addBtn = dialog.querySelector('#pom-time-add-popup');
+    const delBtn = dialog.querySelector('#pom-time-del-popup');
+    const inputEl = dialog.querySelector('#pom-time-input-popup');
+
+    addBtn.onclick = () => {
+      const inputVal = inputEl.value.trim();
+      const val = inputVal === '' || inputVal === '0' ? 0 : (parseInt(inputVal) || 25);
+      if (val !== 0 && (val < 1 || val > 120)) {
+        toastr.error('请输入1-120之间的数字或0(正计时)');
+        return;
+      }
+      pm.timeBlocks.push(val);
+      saveSettings();
+      renderTimeBlocks();
+      toastr.success(`添加${val === 0 ? '正计时' : val + '分钟'}时间块`);
+      inputEl.value = '';
+    };
+
+    delBtn.onclick = () => {
+      pm.timeDeleteMode = !pm.timeDeleteMode;
+      delBtn.style.background = pm.timeDeleteMode ? '#ff9800' : '';
+      renderTimeBlocks();
+      if (pm.timeDeleteMode) {
+        toastr.info('删除模式已开启，点击时间块即可删除');
+      } else {
+        toastr.info('删除模式已关闭');
+      }
+    };
+
+    dialog.querySelector('#popup-close').onclick = () => {
+      if (pm.timeDeleteMode) {
+        pm.timeDeleteMode = false;
+        renderTimeBlocks();
+      }
+      dialog.remove();
+      currentPopupDialog = null;
+    };
+  }
+
+  // ====== 标签管理弹窗 ======
+  function showTagManagePopup() {
+    const dialog = document.createElement('div');
+    dialog.innerHTML = `
+      <div style="background:#fff;padding:12px;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,0.2);width:280px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-weight:600;">
+          <span>标签管理</span>
+          <button id="popup-close" class="ha-btn" style="padding:2px 6px;font-size:12px;">×</button>
+        </div>
+        <div style="margin-bottom:8px;">
+          <div style="font-size:13px;color:#666;margin-bottom:4px;">添加标签：</div>
+          <div style="display:flex;gap:4px;margin-bottom:4px;align-items:center;">
+            <input id="pom-tag-input-popup" type="text" placeholder="标签名称"
+                   style="flex:1;padding:6px;font-size:13px;">
+            <button id="pom-tag-add-popup" class="ha-btn" style="padding:6px 12px;">➕</button>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:13px;color:#666;margin-bottom:4px;">删除标签：</div>
+          <button id="pom-tag-del-popup" class="ha-btn" style="padding:6px 12px;width:100%;">🗑️ 删除模式</button>
+        </div>
+      </div>`;
+    Object.assign(dialog.style, {
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      zIndex: 99999,
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center'
+    });
+    
+    // 关闭之前的弹窗
+    if (currentPopupDialog) {
+      currentPopupDialog.remove();
+    }
+    currentPopupDialog = dialog;
+    
+    content.appendChild(dialog);
+
+    const addBtn = dialog.querySelector('#pom-tag-add-popup');
+    const delBtn = dialog.querySelector('#pom-tag-del-popup');
+    const inputEl = dialog.querySelector('#pom-tag-input-popup');
+
+    addBtn.onclick = () => {
+      const tag = inputEl.value.trim();
+      if (!tag) {
+        toastr.error('请输入标签名');
+        return;
+      }
+      pm.tagBlocks.push(tag);
+      inputEl.value = '';
+      saveSettings();
+      renderTagBlocks();
+      toastr.success(`已添加标签: ${tag}`);
+    };
+
+    delBtn.onclick = () => {
+      pm.tagDeleteMode = !pm.tagDeleteMode;
+      delBtn.style.background = pm.tagDeleteMode ? '#ff9800' : '';
+      renderTagBlocks();
+      if (pm.tagDeleteMode) {
+        toastr.info('删除模式已开启，点击标签即可删除');
+      } else {
+        toastr.info('删除模式已关闭');
+      }
+    };
+
+    dialog.querySelector('#popup-close').onclick = () => {
+      if (pm.tagDeleteMode) {
+        pm.tagDeleteMode = false;
+        renderTagBlocks();
+      }
+      dialog.remove();
+      currentPopupDialog = null;
+    };
   }
 
   // ====== 统计面板 ======
@@ -2608,9 +3484,16 @@ async function showPomodoro() {
       transform: 'translate(-50%, -50%)',
       zIndex: 99999,
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center'
+      justifyContent: 'center',
+      alignItems: 'center'
     });
+    
+    // 关闭之前的弹窗
+    if (currentPopupDialog) {
+      currentPopupDialog.remove();
+    }
+    currentPopupDialog = dialog;
+    
     content.appendChild(dialog);
 
     dialog.querySelector('#stats-sync').onclick = async () => {
@@ -2649,19 +3532,31 @@ async function showPomodoro() {
 
         toastr.success('已同步到世界书');
         dialog.remove();
+        currentPopupDialog = null;
       } catch (e) {
         toastr.error('同步失败: ' + e.message);
       }
     };
 
-    dialog.querySelector('#stats-close').onclick = () => dialog.remove();
-    dialog.querySelector('#popup-close').onclick = () => dialog.remove();
+    dialog.querySelector('#stats-close').onclick = () => {
+      dialog.remove();
+      currentPopupDialog = null;
+    };
+    dialog.querySelector('#popup-close').onclick = () => {
+      dialog.remove();
+      currentPopupDialog = null;
+    };
   }
 
   // ====== 删除记录面板 ======
   let deleteDialogInstance = null;
 
   function showDeletePanel() {
+    // 关闭之前的弹窗
+    if (currentPopupDialog) {
+      currentPopupDialog.remove();
+    }
+    
     if (deleteDialogInstance) {
       deleteDialogInstance.remove();
       deleteDialogInstance = null;
@@ -2690,6 +3585,7 @@ async function showPomodoro() {
     });
     content.appendChild(dialog);
     deleteDialogInstance = dialog;
+    currentPopupDialog = dialog;
 
     const listEl = dialog.querySelector('#delete-list');
 
@@ -2728,62 +3624,17 @@ async function showPomodoro() {
     dialog.querySelector('#popup-close').onclick = () => {
       dialog.remove();
       deleteDialogInstance = null;
+      currentPopupDialog = null;
     };
   }
 
   // ====== 事件监听 ======
-  document.getElementById('pom-time-add').onclick = () => {
-    const inputVal = document.getElementById('pom-time-input').value.trim();
-    const val = inputVal === '' || inputVal === '0' ? 0 : (parseInt(inputVal) || 25);
-    if (val !== 0 && (val < 1 || val > 120)) {
-      toastr.error('请输入1-120之间的数字或0(正计时)');
-      return;
-    }
-    pm.timeBlocks.push(val);
-    saveSettings();
-    renderTimeBlocks();
-    toastr.success(`添加${val === 0 ? '正计时' : val + '分钟'}时间块`);
-  };
+  
+  // 弹窗按钮
+  document.getElementById('pom-settings-btn').onclick = showSettingsPopup;
+  document.getElementById('pom-time-panel-btn').onclick = showTimeManagePopup;
+  document.getElementById('pom-tag-panel-btn').onclick = showTagManagePopup;
 
-  document.getElementById('pom-time-del').onclick = () => {
-    pm.timeDeleteMode = !pm.timeDeleteMode;
-    document.getElementById('pom-time-del').style.background = pm.timeDeleteMode ? '#ff9800' : '';
-    renderTimeBlocks();
-  };
-
-  document.getElementById('pom-tag-add').onclick = () => {
-    const tag = document.getElementById('pom-tag-input').value.trim();
-    if (!tag) {
-      toastr.error('请输入标签名');
-      return;
-    }
-    pm.tagBlocks.push(tag);
-    document.getElementById('pom-tag-input').value = '';
-    saveSettings();
-    renderTagBlocks();
-    toastr.success(`已添加标签: ${tag}`);
-  };
-
-  document.getElementById('pom-tag-del').onclick = () => {
-    pm.tagDeleteMode = !pm.tagDeleteMode;
-    document.getElementById('pom-tag-del').style.background = pm.tagDeleteMode ? '#ff9800' : '';
-    renderTagBlocks();
-  };
-
-  // BGM 按钮处理
-  const bgmPlayBtn = document.getElementById('pom-bgm-play');
-  const bgmNextBtn = document.getElementById('pom-bgm-next');
-  const bgmVolume = document.getElementById('pom-bgm-volume');
-
-  bgmPlayBtn.addEventListener('click', playBgm);
-  bgmNextBtn.addEventListener('click', nextBgm);
-  bgmVolume.addEventListener('input', (e) => {
-    if (bgmAudio) {
-      bgmAudio.volume = e.target.value / 100;
-    }
-  });
-
-  document.getElementById('pom-notify-btn').onclick = showNotifyConfig;
   document.getElementById('pom-todo-btn').onclick = showTodoPopup;
   document.getElementById('pom-habit-btn').onclick = showHabitPopup;
   document.getElementById('pom-start-btn').onclick = showSessionPanel;
@@ -2795,6 +3646,7 @@ async function showPomodoro() {
   renderTagBlocks();
   updateBgmDisplay();
 }
+
 
   
       
@@ -5857,33 +6709,34 @@ async function showFinance() {
       offsetSign + offsetHours + ':' + offsetMinutes;
   }
 
-
-
   const container = content;
   container.style.display = 'block';
   container.innerHTML = `
     <div style="font-weight:600;margin-bottom:6px">收支平衡</div>
 
     <!-- 收入标签 -->
-    <div style="margin-bottom:6px;">
-      <div><b>收入标签</b></div>
-      <div style="display:flex;gap:6px;margin-top:4px;">
-        <input id="ha-income-input" placeholder="输入新收入标签" style="flex:1;padding:4px;border:1px solid #ccc;border-radius:4px;">
-        <button id="ha-income-add" class="ha-btn" style="width:50px;">➕</button>
-        <button id="ha-income-del" class="ha-btn" style="width:50px;">🗑️</button>
+    <div style="margin-bottom:12px;">
+      <div style="font-weight:600;margin-bottom:6px;">收入标签</div>
+      <div style="display:flex;gap:6px;margin-bottom:4px;">
+        <input id="ha-income-input" placeholder="输入新收入标签" style="width:120px;margin-right:4px;padding:2px;font-size:12px;">
+        <button id="ha-income-add" class="ha-btn" style="width:50px;padding:6px;border-radius:4px;">➕</button>
+        <button id="ha-income-edit" class="ha-btn" style="width:50px;padding:6px;border-radius:4px;">✏️</button>
+        <button id="ha-income-del" class="ha-btn" style="width:50px;padding:6px;border-radius:4px;">🗑️</button>
       </div>
-      <div id="ha-income-tags" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+      <div id="ha-income-tags" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
     </div>
 
     <!-- 支出标签 -->
-    <div style="margin-bottom:6px;">
-      <div><b>支出标签</b></div>
-      <div style="display:flex;gap:6px;margin-top:4px;">
-        <input id="ha-expense-input" placeholder="输入新支出标签" style="flex:1;padding:4px;border:1px solid #ccc;border-radius:4px;">
-        <button id="ha-expense-add" class="ha-btn" style="width:50px;">➕</button>
-        <button id="ha-expense-del" class="ha-btn" style="width:50px;">🗑️</button>
+    <div style="margin-bottom:12px;">
+      <div style="font-weight:600;margin-bottom:6px;">支出标签</div>
+      <div style="display:flex;gap:6px;margin-bottom:4px;">
+        <input id="ha-expense-input" placeholder="输入新支出标签" style="width:120px;margin-right:4px;padding:2px;font-size:12px;">
+        <button id="ha-expense-add" class="ha-btn" style="flex:1;padding:6px;border-radius:4px;">➕</button>
+        <button id="ha-expense-edit" class="ha-btn" style="flex:1;padding:6px;border-radius:4px;">✏️</button>
+        <button id="ha-expense-del" class="ha-btn" style="flex:1;padding:6px;border-radius:4px;">🗑️</button>
+        <button id="ha-budget-btn" class="ha-btn" style="flex:1;padding:6px;border-radius:4px;">预算</button>
       </div>
-      <div id="ha-expense-tags" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+      <div id="ha-expense-tags" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
     </div>
 
     <!-- 汇总 -->
@@ -5900,13 +6753,24 @@ async function showFinance() {
       <button id="ha-detail" class="ha-btn" style="flex:1;">收支明细</button>
     </div>
 
+    <!-- 定期清除按钮 -->
+    <div style="display:flex;gap:8px;margin-bottom:6px;">
+      <button id="ha-finance-auto-clean" class="ha-btn" style="flex:1;">定期清除</button>
+    </div>
+
     <!-- 输出区 -->
     <div id="ha-finance-result" style="margin-top:6px;padding:6px;border:1px solid #ddd;background:#fafafa;white-space:pre-wrap;min-height:60px;max-height:300px;overflow:auto;"></div>
   `;
 
   const state = ctx.extensionSettings[MODULE_NAME];
   if (!state.finance) {
-    state.finance = { incomeTags: [], expenseTags: [], records: [] };
+    state.finance = { incomeTags: [], expenseTags: [], records: [], budgets: {} };
+    saveSettings();
+  }
+  
+  // 确保budgets对象存在
+  if (!state.finance.budgets) {
+    state.finance.budgets = {};
     saveSettings();
   }
 
@@ -5921,6 +6785,8 @@ async function showFinance() {
   const balanceEl = document.getElementById('ha-total-balance');
   const resultEl = document.getElementById('ha-finance-result');
   let delMode = { income: false, expense: false };
+  let editMode = { income: false, expense: false };
+  let budgetMode = false;
 
   // 🔍 查找世界书文件
   async function findHealthWorldFile() {
@@ -5930,7 +6796,7 @@ async function showFinance() {
       for (const WI of selected) {
         if (WI.includes('健康生活助手')) return WI;
       }
-      toastr.warning('未找到 “健康生活助手” 世界书');
+      toastr.warning('未找到 "健康生活助手" 世界书');
       return null;
     } catch (e) {
       toastr.error('查找世界书异常: ' + e.message);
@@ -5938,7 +6804,7 @@ async function showFinance() {
     }
   }
 
-  // 🧾 写入世界书
+  // 🧾 写入世界书 - 收入/支出明细
   async function appendToWorldInfoFinance() {
     try {
       const fileId = await findHealthWorldFile();
@@ -5951,15 +6817,14 @@ async function showFinance() {
       let incomeUID = null, expenseUID = null;
       for (const id in entries) {
         const entry = entries[id];
-        const comment = entry.comment || '';
         if (!entry.disable) {
-          if (comment.includes('收入') || entry.title === '收入') incomeUID = entry.uid;
-          if (comment.includes('支出') || entry.title === '支出') expenseUID = entry.uid;
+          if (entry.comment === '收入') incomeUID = entry.uid;
+          if (entry.comment === '支出') expenseUID = entry.uid;
         }
       }
 
       if (!incomeUID && !expenseUID) {
-        toastr.info('未找到 “收入/支出” 条目，请在世界书中创建。');
+        toastr.info('未找到 "收入/支出" 条目，请在世界书中创建。');
         return;
       }
 
@@ -5979,53 +6844,463 @@ async function showFinance() {
       if (expenseUID)
         await setField({file:fileId, uid:expenseUID, field:'content'}, expenseList.join('\n'));
 
-      toastr.success('世界书已同步 ✅');
+      toastr.success('世界书明细已同步 ✅');
     } catch (e) {
       toastr.error('写入世界书失败：' + e.message);
     }
   }
 
-  // 标签渲染与点击
-  function renderTags() {
-    function render(el, list, type) {
-      el.innerHTML = '';
-      list.forEach(tag => {
-        const btn = document.createElement('div');
-        btn.textContent = tag;
-        btn.style.cssText = 'padding:4px 8px;border:1px solid #aaa;border-radius:6px;cursor:pointer;background:#fff;';
-        btn.addEventListener('click', async () => {
-          if (delMode[type]) {
-            const idx = list.indexOf(tag);
-            if (idx >= 0) list.splice(idx, 1);
-            saveSettings();
-            renderTags();
-            toastr.info(`已删除${type === 'income' ? '收入' : '支出'}标签`);
-          } else {
-            const name = prompt('输入名称（可留空）', '');
-            const value = prompt('输入金额（元）', '');
-            if (!value || isNaN(parseFloat(value))) return toastr.warning('金额无效');
-            // 生成带时区偏移的 ISO 格式时间
-            const rec = { type, tag, name: name || '', value: parseFloat(value), date: getISOWithOffset() };
-            finance.records.push(rec);
-            saveSettings();
-            await appendToWorldInfoFinance();
-            updateSummary();
-            toastr.success(`${type === 'income' ? '收入' : '支出'}记录已添加`);
-          }
-        });
-        el.appendChild(btn);
-      });
+  // 📊 同步收入分析到世界书
+  async function syncIncomeAnalysis() {
+    try {
+      const fileId = await findHealthWorldFile();
+      if (!fileId) return;
+
+      const moduleWI = await import('/scripts/world-info.js');
+      const worldInfo = await moduleWI.loadWorldInfo(fileId);
+      const entries = worldInfo.entries || {};
+
+      let targetUID = null;
+      for (const id in entries) {
+        const entry = entries[id];
+        if (!entry.disable && entry.comment === '收入分析') {
+          targetUID = entry.uid;
+          break;
+        }
+      }
+
+      if (!targetUID) {
+        toastr.error('[收支平衡] 未找到"收入分析"条目，跳过同步');
+        return;
+      }
+
+      const monthRecords = finance.records.filter(r => r.type === 'income' && r.date.substring(0, 7) === ym);
+      const byTag = {};
+      monthRecords.forEach(r => (byTag[r.tag] = (byTag[r.tag] || 0) + r.value));
+      const sorted = Object.entries(byTag).sort((a, b) => b[1] - a[1]);
+      
+      // 计算总收入
+      const totalIncome = sorted.reduce((sum, [, v]) => sum + v, 0);
+      
+      // 计算所有配置的预算总和
+      const totalBudget = Object.values(finance.budgets).reduce((sum, budget) => sum + budget, 0);
+      
+      // 计算剩余可支配预算
+      const remainingBudget = totalIncome - totalBudget;
+      
+      let analysisText = '当月收入分析：\n' + sorted.map(([t, v]) => `${t}: ${v.toFixed(2)}元`).join('\n');
+      analysisText += `\n\n总收入: ${totalIncome.toFixed(2)}元`;
+      analysisText += `\n已配置预算: ${totalBudget.toFixed(2)}元`;
+      analysisText += `\n剩余可支配预算: ${remainingBudget.toFixed(2)}元`;
+
+      const ctxObj = globalThis.SillyTavern.getContext();
+      const setField = ctxObj.SlashCommandParser.commands['setentryfield'].callback;
+      await setField({file:fileId, uid:targetUID, field:'content'},analysisText);
+
+      console.log('[收支平衡] 收入分析已同步');
+    } catch (e) {
+      toastr.error('[收支平衡] 同步收入分析失败:', e);
     }
-    render(incomeEl, finance.incomeTags, 'income');
-    render(expenseEl, finance.expenseTags, 'expense');
   }
 
-  function updateSummary() {
-    // 提取日期字符串的年月部分（兼容带时区偏移的 ISO 格式）
-    const monthRecords = finance.records.filter(r => {
-      const dateStr = r.date.substring(0, 7); // 提取 YYYY-MM 部分
-      return dateStr === ym;
+  // 📊 同步支出分析到世界书（包含预算信息）
+  async function syncExpenseAnalysis() {
+    try {
+      const fileId = await findHealthWorldFile();
+      if (!fileId) return;
+
+      const moduleWI = await import('/scripts/world-info.js');
+      const worldInfo = await moduleWI.loadWorldInfo(fileId);
+      const entries = worldInfo.entries || {};
+
+      let targetUID = null;
+      for (const id in entries) {
+        const entry = entries[id];
+        if (!entry.disable && entry.comment === '支出分析') {
+          targetUID = entry.uid;
+          break;
+        }
+      }
+
+      if (!targetUID) {
+        toastr.error('[收支平衡] 未找到"支出分析"条目，跳过同步');
+        return;
+      }
+
+      const monthRecords = finance.records.filter(r => r.type === 'expense' && r.date.substring(0, 7) === ym);
+      const byTag = {};
+      monthRecords.forEach(r => (byTag[r.tag] = (byTag[r.tag] || 0) + r.value));
+      const sorted = Object.entries(byTag).sort((a, b) => b[1] - a[1]);
+      
+      // 添加预算信息
+      let analysisText = '当月支出分析：\n';
+      sorted.forEach(([tag, value]) => {
+        const budget = finance.budgets[tag] || 0;
+        if (budget > 0) {
+          const percentage = (value / budget * 100).toFixed(1);
+          const remaining = budget - value;
+          analysisText += `${tag}: ${value.toFixed(2)}元 (预算: ${budget}元, 已用: ${percentage}%, 剩余: ${remaining.toFixed(2)}元)\n`;
+        } else {
+          analysisText += `${tag}: ${value.toFixed(2)}元 (未设置预算)\n`;
+        }
+      });
+
+      const ctxObj = globalThis.SillyTavern.getContext();
+      const setField = ctxObj.SlashCommandParser.commands['setentryfield'].callback;
+      await setField({file:fileId, uid:targetUID, field:'content'}, analysisText);
+
+      console.log('[收支平衡] 支出分析已同步');
+    } catch (e) {
+      toastr.error('[收支平衡] 同步支出分析失败:', e);
+    }
+  }
+
+  // 同步所有财务数据到世界书
+  async function syncAllFinanceData() {
+    await appendToWorldInfoFinance();
+    await syncIncomeAnalysis();
+    await syncExpenseAnalysis();
+  }
+
+  // 计算标签颜色（基于预算使用情况）
+  function getTagColor(tag, type) {
+    if (type !== 'expense') return '#e0e0e0';
+    
+    const budget = finance.budgets[tag] || 0;
+    if (budget === 0) return '#e0e0e0'; // 未设置预算
+    
+    const monthRecords = finance.records.filter(r => 
+      r.type === 'expense' && 
+      r.tag === tag && 
+      r.date.substring(0, 7) === ym
+    );
+    const used = monthRecords.reduce((sum, r) => sum + r.value, 0);
+    const percentage = (used / budget) * 100;
+    
+    if (percentage > 100) return '#e0e0e0'; // 超出预算 - 浅灰色
+    if (percentage > 80) return '#ffcdd2'; // 80-100% - 浅红色
+    if (percentage > 60) return '#fff9c4'; // 40-60% - 浅黄色
+    if (percentage > 20) return '#b3e5fc'; // 60-80% - 浅蓝色
+    return '#c8e6c9'; // 80-100% - 浅绿色
+  }
+
+  // 渲染标签
+  function renderTags() {
+    incomeEl.innerHTML = '';
+    expenseEl.innerHTML = '';
+    
+    finance.incomeTags.forEach(tag => {
+      const btn = document.createElement('button');
+      btn.className = 'ha-btn';
+      btn.textContent = tag;
+      btn.style.background = getTagColor(tag, 'income');
+      btn.style.padding = '4px 8px';
+      btn.style.fontSize = '12px';
+      
+      btn.addEventListener('click', () => {
+        if (editMode.income) {
+          editTag('income', tag);
+        } else if (delMode.income) {
+          if (confirm(`确认删除收入标签 "${tag}"？`)) {
+            finance.incomeTags = finance.incomeTags.filter(t => t !== tag);
+            saveSettings();
+            renderTags();
+            toastr.success('已删除收入标签');
+          }
+        } else {
+          openRecordDialog('income', tag);
+        }
+      });
+      incomeEl.appendChild(btn);
     });
+    
+    finance.expenseTags.forEach(tag => {
+      const btn = document.createElement('button');
+      btn.className = 'ha-btn';
+      btn.textContent = tag;
+      btn.style.background = getTagColor(tag, 'expense');
+      btn.style.padding = '4px 8px';
+      btn.style.fontSize = '12px';
+      
+      btn.addEventListener('click', () => {
+        if (editMode.expense) {
+          editTag('expense', tag);
+        } else if (delMode.expense) {
+          if (confirm(`确认删除支出标签 "${tag}"？`)) {
+            finance.expenseTags = finance.expenseTags.filter(t => t !== tag);
+            // 同时删除该标签的预算
+            delete finance.budgets[tag];
+            saveSettings();
+            renderTags();
+            toastr.success('已删除支出标签及其预算');
+          }
+        } else if (budgetMode) {
+          openBudgetDialog(tag);
+        } else {
+          openRecordDialog('expense', tag);
+        }
+      });
+      expenseEl.appendChild(btn);
+    });
+  }
+
+  // 编辑标签函数
+  async function editTag(type, oldTag) {
+    const newTag = prompt(`修改标签名称：`, oldTag);
+    if (!newTag || newTag === oldTag) return;
+    
+    if (type === 'income') {
+      // 检查是否重名
+      if (finance.incomeTags.includes(newTag)) {
+        return toastr.warning('标签名称已存在');
+      }
+      
+      // 更新localStorage中的标签
+      const idx = finance.incomeTags.indexOf(oldTag);
+      if (idx !== -1) {
+        finance.incomeTags[idx] = newTag;
+      }
+      
+      // 更新所有记录中的标签
+      finance.records.forEach(r => {
+        if (r.type === 'income' && r.tag === oldTag) {
+          r.tag = newTag;
+        }
+      });
+    } else {
+      // 检查是否重名
+      if (finance.expenseTags.includes(newTag)) {
+        return toastr.warning('标签名称已存在');
+      }
+      
+      // 更新localStorage中的标签
+      const idx = finance.expenseTags.indexOf(oldTag);
+      if (idx !== -1) {
+        finance.expenseTags[idx] = newTag;
+      }
+      
+      // 更新预算
+      if (finance.budgets[oldTag]) {
+        finance.budgets[newTag] = finance.budgets[oldTag];
+        delete finance.budgets[oldTag];
+      }
+      
+      // 更新所有记录中的标签
+      finance.records.forEach(r => {
+        if (r.type === 'expense' && r.tag === oldTag) {
+          r.tag = newTag;
+        }
+      });
+    }
+    
+    saveSettings();
+    
+    // 同步到世界书
+    try {
+      const fileId = await findHealthWorldFile();
+      if (!fileId) {
+        renderTags();
+        toastr.success('标签已更新（未找到世界书）');
+        return;
+      }
+
+      const moduleWI = await import('/scripts/world-info.js');
+      const worldInfo = await moduleWI.loadWorldInfo(fileId);
+      const entries = worldInfo.entries || {};
+
+      // 找到对应的条目
+      let targetUID = null;
+      const targetComment = type === 'income' ? '收入' : '支出';
+      
+      for (const id in entries) {
+        const entry = entries[id];
+        if (!entry.disable && entry.comment === targetComment) {
+          targetUID = entry.uid;
+          break;
+        }
+      }
+
+      if (targetUID) {
+        // 更新世界书内容
+        const typeRecords = finance.records.filter(r => r.type === type);
+        const updatedContent = typeRecords.map((r,i)=>
+          `${i+1}. ${r.date} ${r.tag}${r.name?`(${r.name})`:''}：${r.value}元`
+        ).join('\n');
+        
+        const ctxObj = globalThis.SillyTavern.getContext();
+        const setField = ctxObj.SlashCommandParser.commands['setentryfield'].callback;
+        await setField({file:fileId, uid:targetUID, field:'content'}, updatedContent);
+      }
+      
+      // 同步分析
+      await syncAllFinanceData();
+      
+      renderTags();
+      toastr.success(`标签已更新：${oldTag} → ${newTag}`);
+    } catch (e) {
+      renderTags();
+      toastr.error('更新世界书失败：' + e.message);
+    }
+  }
+
+  // 打开预算设置对话框
+  function openBudgetDialog(tag) {
+    const currentBudget = finance.budgets[tag] || 0;
+    const monthRecords = finance.records.filter(r => 
+      r.type === 'expense' && 
+      r.tag === tag && 
+      r.date.substring(0, 7) === ym
+    );
+    const used = monthRecords.reduce((sum, r) => sum + r.value, 0);
+    
+    const overlay = document.createElement('div');
+    overlay.className = 'ha-sleep-records-overlay';
+    overlay.innerHTML = `
+      <div class="ha-sleep-records-panel" style="max-width: 400px;">
+        <div class="ha-sleep-records-title">预算设置 - ${tag}</div>
+        <div style="margin-bottom: 12px;">
+          <div style="margin-bottom: 8px;">
+            <strong>当前预算：</strong>${currentBudget}元
+          </div>
+          <div style="margin-bottom: 8px;">
+            <strong>已使用：</strong>${used.toFixed(2)}元 (${currentBudget > 0 ? (used/currentBudget*100).toFixed(1) : 0}%)
+          </div>
+          <div style="margin-bottom: 8px;">
+            <strong>剩余预算：</strong>${(currentBudget - used).toFixed(2)}元
+          </div>
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px;">设置月度预算（元）:</label>
+          <input type="number" id="budget-input" value="${currentBudget}" min="0" step="0.01" 
+                 style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+        </div>
+        <div class="ha-sleep-records-footer">
+          <button id="budget-save" class="ha-btn" style="background: #4CAF50; color: #fff;">保存</button>
+          <button id="budget-cancel" class="ha-btn" style="margin-left: 6px;">取消</button>
+        </div>
+      </div>
+    `;
+    
+    container.appendChild(overlay);
+    
+    overlay.querySelector('#budget-save').addEventListener('click', async () => {
+      const value = parseFloat(overlay.querySelector('#budget-input').value);
+      if (isNaN(value) || value < 0) {
+        toastr.warning('请输入有效的预算金额');
+        return;
+      }
+      finance.budgets[tag] = value;
+      saveSettings();
+      renderTags();
+      updateSummary();
+      // 同步到世界书，包括收入分析和支出分析
+      await syncIncomeAnalysis();
+      await syncExpenseAnalysis();
+      toastr.success(`已设置${tag}的预算为${value}元`);
+      overlay.remove();
+    });
+    
+    overlay.querySelector('#budget-cancel').addEventListener('click', () => {
+      overlay.remove();
+    });
+  }
+
+  // 打开记录对话框
+  function openRecordDialog(type, tag) {
+    const overlay = document.createElement('div');
+    overlay.className = 'ha-sleep-records-overlay';
+    
+    // 如果是支出，显示预算信息
+    let budgetInfo = '';
+    if (type === 'expense') {
+      const budget = finance.budgets[tag] || 0;
+      const monthRecords = finance.records.filter(r => 
+        r.type === 'expense' && 
+        r.tag === tag && 
+        r.date.substring(0, 7) === ym
+      );
+      const used = monthRecords.reduce((sum, r) => sum + r.value, 0);
+      if (budget > 0) {
+        const remaining = budget - used;
+        budgetInfo = `
+          <div style="margin-bottom: 12px; padding: 8px; background: #f0f8ff; border-radius: 4px; font-size: 12px;">
+            <div><strong>预算信息：</strong></div>
+            <div>总预算: ${budget}元</div>
+            <div>已使用: ${used.toFixed(2)}元 (${(used/budget*100).toFixed(1)}%)</div>
+            <div>剩余: ${remaining.toFixed(2)}元</div>
+          </div>
+        `;
+      }
+    }
+    
+    overlay.innerHTML = `
+      <div class="ha-sleep-records-panel" style="max-width: 400px;">
+        <div class="ha-sleep-records-title">记录${type === 'income' ? '收入' : '支出'} - ${tag}</div>
+        ${budgetInfo}
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px;">金额（元）:</label>
+          <input type="number" id="record-value" placeholder="请输入金额" min="0" step="0.01" 
+                 style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px;">名称（可选）:</label>
+          <input type="text" id="record-name" placeholder="请输入名称" 
+                 style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+        </div>
+        <div class="ha-sleep-records-footer">
+          <button id="record-save" class="ha-btn" style="background: #4CAF50; color: #fff;">确认</button>
+          <button id="record-cancel" class="ha-btn" style="margin-left: 6px;">取消</button>
+        </div>
+      </div>
+    `;
+    
+    container.appendChild(overlay);
+    
+    const valueInput = overlay.querySelector('#record-value');
+    const nameInput = overlay.querySelector('#record-name');
+    
+    overlay.querySelector('#record-save').addEventListener('click', async () => {
+      const value = parseFloat(valueInput.value);
+      const name = nameInput.value.trim();
+      
+      if (isNaN(value) || value <= 0) {
+        toastr.warning('请输入有效的金额');
+        return;
+      }
+      
+      const record = {
+        type,
+        tag,
+        value,
+        name,
+        date: getISOWithOffset().substring(0, 10)
+      };
+      
+      finance.records.push(record);
+      saveSettings();
+      await syncAllFinanceData();
+      renderTags();
+      updateSummary();
+      toastr.success(`已记录${type === 'income' ? '收入' : '支出'}: ${value}元`);
+      overlay.remove();
+    });
+    
+    // 修复：正确处理取消操作
+    overlay.querySelector('#record-cancel').addEventListener('click', () => {
+      overlay.remove();
+    });
+    
+    // 点击遮罩层也关闭对话框
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+      }
+    });
+  }
+
+  // 更新汇总
+  function updateSummary() {
+    const monthRecords = finance.records.filter(r => r.date.substring(0, 7) === ym);
     const totalIncome = monthRecords.filter(r => r.type === 'income').reduce((a, b) => a + b.value, 0);
     const totalExpense = monthRecords.filter(r => r.type === 'expense').reduce((a, b) => a + b.value, 0);
     totalIncomeEl.textContent = totalIncome.toFixed(2);
@@ -6033,7 +7308,7 @@ async function showFinance() {
     balanceEl.textContent = (totalIncome - totalExpense).toFixed(2);
   }
 
-  // 标签添加/删除
+  // 标签添加
   document.getElementById('ha-income-add').addEventListener('click', () => {
     const v = document.getElementById('ha-income-input').value.trim();
     if (v && !finance.incomeTags.includes(v)) {
@@ -6041,8 +7316,10 @@ async function showFinance() {
       saveSettings();
       renderTags();
       toastr.success('已添加收入标签');
+      document.getElementById('ha-income-input').value = '';
     }
   });
+  
   document.getElementById('ha-expense-add').addEventListener('click', () => {
     const v = document.getElementById('ha-expense-input').value.trim();
     if (v && !finance.expenseTags.includes(v)) {
@@ -6050,17 +7327,47 @@ async function showFinance() {
       saveSettings();
       renderTags();
       toastr.success('已添加支出标签');
+      document.getElementById('ha-expense-input').value = '';
     }
   });
+  
+  // 编辑模式切换
+  document.getElementById('ha-income-edit').addEventListener('click', e => {
+    editMode.income = !editMode.income;
+    e.target.style.background = editMode.income ? '#ffe082' : '';
+    toastr.info(editMode.income ? '收入编辑模式开启 - 点击标签修改名称' : '收入编辑模式关闭');
+  });
+  
+  document.getElementById('ha-expense-edit').addEventListener('click', e => {
+    editMode.expense = !editMode.expense;
+    e.target.style.background = editMode.expense ? '#ffe082' : '';
+    toastr.info(editMode.expense ? '支出编辑模式开启 - 点击标签修改名称' : '支出编辑模式关闭');
+  });
+  
+  // 删除模式切换
   document.getElementById('ha-income-del').addEventListener('click', e => {
     delMode.income = !delMode.income;
     e.target.style.background = delMode.income ? '#f88' : '';
     toastr.info(delMode.income ? '收入删除模式开启' : '收入删除模式关闭');
   });
+  
   document.getElementById('ha-expense-del').addEventListener('click', e => {
     delMode.expense = !delMode.expense;
     e.target.style.background = delMode.expense ? '#f88' : '';
     toastr.info(delMode.expense ? '支出删除模式开启' : '支出删除模式关闭');
+  });
+
+  // 预算模式切换
+  document.getElementById('ha-budget-btn').addEventListener('click', e => {
+    budgetMode = !budgetMode;
+    if (budgetMode) {
+      e.target.style.background = '#4CAF50';
+      e.target.style.color = 'white';
+    } else {
+      e.target.style.background = '';
+      e.target.style.color = '';
+    }
+    toastr.info(budgetMode ? '预算设置模式开启 - 点击标签设置预算' : '预算设置模式关闭');
   });
 
   // 分析
@@ -6069,14 +7376,44 @@ async function showFinance() {
     const byTag = {};
     monthRecords.forEach(r => (byTag[r.tag] = (byTag[r.tag] || 0) + r.value));
     const sorted = Object.entries(byTag).sort((a, b) => b[1] - a[1]);
-    resultEl.innerText = '当月收入分析：\n' + sorted.map(([t, v]) => `${t}: ${v.toFixed(2)}元`).join('\n');
+    
+    // 计算总收入
+    const totalIncome = sorted.reduce((sum, [, v]) => sum + v, 0);
+    
+    // 计算所有配置的预算总和
+    const totalBudget = Object.values(finance.budgets).reduce((sum, budget) => sum + budget, 0);
+    
+    // 计算剩余可支配预算
+    const remainingBudget = totalIncome - totalBudget;
+    
+    let analysisText = '当月收入分析：\n' + sorted.map(([t, v]) => `${t}: ${v.toFixed(2)}元`).join('\n');
+    analysisText += `\n\n总收入: ${totalIncome.toFixed(2)}元`;
+    analysisText += `\n已配置预算: ${totalBudget.toFixed(2)}元`;
+    analysisText += `\n剩余可支配预算: ${remainingBudget.toFixed(2)}元`;
+    
+    resultEl.innerText = analysisText;
   });
+  
   document.getElementById('ha-expense-analysis').addEventListener('click', () => {
     const monthRecords = finance.records.filter(r => r.type === 'expense' && r.date.substring(0, 7) === ym);
     const byTag = {};
     monthRecords.forEach(r => (byTag[r.tag] = (byTag[r.tag] || 0) + r.value));
     const sorted = Object.entries(byTag).sort((a, b) => b[1] - a[1]);
-    resultEl.innerText = '当月支出分析：\n' + sorted.map(([t, v]) => `${t}: ${v.toFixed(2)}元`).join('\n');
+    
+    // 包含预算信息的支出分析
+    let analysisText = '当月支出分析：\n';
+    sorted.forEach(([tag, value]) => {
+      const budget = finance.budgets[tag] || 0;
+      if (budget > 0) {
+        const percentage = (value / budget * 100).toFixed(1);
+        const remaining = budget - value;
+        analysisText += `${tag}: ${value.toFixed(2)}元 (预算: ${budget}元, 已用: ${percentage}%, 剩余: ${remaining.toFixed(2)}元)\n`;
+      } else {
+        analysisText += `${tag}: ${value.toFixed(2)}元 (未设置预算)\n`;
+      }
+    });
+    
+    resultEl.innerText = analysisText;
   });
 
   // 收支明细
@@ -6100,22 +7437,24 @@ async function showFinance() {
       del.textContent = '🗑️';
       del.style.cssText = 'cursor:pointer;';
       edit.addEventListener('click', async () => {
-        const newName = prompt('修改名称（可留空）', r.name);
         const newVal = prompt('修改金额（元）', r.value);
         if (!newVal || isNaN(parseFloat(newVal))) return toastr.warning('金额无效');
+        const newName = prompt('修改名称（可留空）', r.name);
         r.name = newName || '';
         r.value = parseFloat(newVal);
         saveSettings();
-        await appendToWorldInfoFinance();
+        await syncAllFinanceData();
+        renderTags();
         updateSummary();
         toastr.success('记录已更新');
         document.getElementById('ha-detail').click();
       });
       del.addEventListener('click', async () => {
         if (!confirm('确认删除该记录？')) return;
-        finance.records.splice(idx, 1);
+        finance.records.splice(finance.records.indexOf(r), 1);
         saveSettings();
-        await appendToWorldInfoFinance();
+        await syncAllFinanceData();
+        renderTags();
         updateSummary();
         toastr.info('记录已删除');
         document.getElementById('ha-detail').click();
@@ -6125,6 +7464,102 @@ async function showFinance() {
       resultEl.appendChild(div);
     });
   });
+
+  // 定期清除按钮
+  document.getElementById('ha-finance-auto-clean').addEventListener('click', () => {
+    openAutoCleanPanel();
+  });
+
+  // 定期清除面板
+  function openAutoCleanPanel() {
+    const panel = document.createElement('div');
+    panel.className = 'ha-sleep-records-overlay';
+    
+    const config = ctx.extensionSettings[MODULE_NAME].financeAutoClean || {
+      days: 30,
+      cleanLocalStorage: false,
+      cleanWorldBook: false
+    };
+    
+    panel.innerHTML = `
+      <div class="ha-sleep-records-panel" style="max-width: 400px;">
+        <div class="ha-sleep-records-title">定期清除设置</div>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px;">清除天数（保留最近N天）:</label>
+          <input type="number" id="auto-clean-days" value="${config.days}" min="1" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+          <div style="font-size: 11px; color: #666; margin-top: 2px;">例如: 输入30表示保留最近30天的记录</div>
+        </div>
+        <div style="margin-bottom: 12px;">
+          <button id="auto-clean-localstorage" class="ha-btn" style="width: 100%; margin-bottom: 6px; ${config.cleanLocalStorage ? 'background: #f44336; color: #fff;' : ''}">
+            ${config.cleanLocalStorage ? '✓ ' : ''}清除 localStorage
+          </button>
+          <button id="auto-clean-worldbook" class="ha-btn" style="width: 100%; ${config.cleanWorldBook ? 'background: #f44336; color: #fff;' : ''}">
+            ${config.cleanWorldBook ? '✓ ' : ''}清除世界书
+          </button>
+        </div>
+        <div style="font-size: 12px; color: #666; padding: 8px; background: #f9f9f9; border-radius: 4px; margin-bottom: 12px;">
+          <strong>说明:</strong> 每天04:00自动清除过期记录（仅清除"收入"和"支出"条目）。如果04:00时浏览器未打开，则在扩展下次启动时执行清除。
+        </div>
+        <div class="ha-sleep-records-footer">
+          <button id="auto-clean-save" class="ha-btn" style="background: #4CAF50; color: #fff;">保存设置</button>
+          <button id="auto-clean-close" class="ha-btn" style="margin-left: 6px;">关闭</button>
+        </div>
+      </div>
+    `;
+    
+    container.appendChild(panel);
+    
+    let cleanLocalStorage = config.cleanLocalStorage;
+    let cleanWorldBook = config.cleanWorldBook;
+    
+    panel.querySelector('#auto-clean-localstorage').addEventListener('click', (e) => {
+      cleanLocalStorage = !cleanLocalStorage;
+      const btn = e.target;
+      if (cleanLocalStorage) {
+        btn.style.background = '#f44336';
+        btn.style.color = '#fff';
+        btn.textContent = '✓ 清除 localStorage';
+      } else {
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.textContent = '清除 localStorage';
+      }
+    });
+    
+    panel.querySelector('#auto-clean-worldbook').addEventListener('click', (e) => {
+      cleanWorldBook = !cleanWorldBook;
+      const btn = e.target;
+      if (cleanWorldBook) {
+        btn.style.background = '#f44336';
+        btn.style.color = '#fff';
+        btn.textContent = '✓ 清除世界书';
+      } else {
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.textContent = '清除世界书';
+      }
+    });
+    
+    panel.querySelector('#auto-clean-save').addEventListener('click', () => {
+      const days = parseInt(panel.querySelector('#auto-clean-days').value);
+      if (isNaN(days) || days < 1) {
+        toastr.warning('请输入有效的天数（至少为1）', '输入错误');
+        return;
+      }
+      
+      ctx.extensionSettings[MODULE_NAME].financeAutoClean = {
+        days,
+        cleanLocalStorage,
+        cleanWorldBook,
+        lastCleanDate: ctx.extensionSettings[MODULE_NAME].financeAutoClean?.lastCleanDate || null
+      };
+      saveSettings();
+      toastr.success('定期清除设置已保存', '保存成功');
+      panel.remove();
+    });
+    
+    panel.querySelector('#auto-clean-close').onclick = () => panel.remove();
+  }
 
   renderTags();
   updateSummary();
@@ -6425,6 +7860,11 @@ async function showFinance() {
   render();
 }
 
+
+
+
+
+
 async function showTodo() {
   try { 
     const cs = window.getComputedStyle(content);
@@ -6512,6 +7952,7 @@ async function showTodo() {
         case 'CONNECTED':
           debugLog('后端就绪');
           break;
+          
         case 'TODO_NOTIFICATION_FIRED':
           debugLog('待办通知已触发:', data.todoName);
           const todo = todos.find(t => t.id === data.todoId);
@@ -6523,6 +7964,25 @@ async function showTodo() {
           if (typeof toastr !== 'undefined') {
             toastr.warning(`任务截止: ${data.todoName}`, '⏰ 待办提醒', { timeOut: 10000 });
           }
+          break;
+          
+        case 'TODO_RECURRENT_FIRED':
+          debugLog('循环待办通知已触发:', data.todoName);
+          // 循环待办不需要禁用 notifyScheduled，它会继续触发
+          if (typeof toastr !== 'undefined') {
+            let recurrenceText = '';
+            if (data.recurrence) {
+              if (data.recurrence.type === 'weekly') {
+                const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+                const dayNames = data.recurrence.days.map(d => '周' + weekDays[d]).join(',');
+                recurrenceText = `每周${dayNames} ${data.recurrence.time}`;
+              } else if (data.recurrence.type === 'monthly') {
+                recurrenceText = `每月${data.recurrence.date}号 ${data.recurrence.time}`;
+              }
+            }
+            toastr.warning(`循环任务: ${data.todoName}\n${recurrenceText}`, '🔁 循环提醒', { timeOut: 10000 });
+          }
+          render();
           break;
       }
     }
@@ -6560,56 +8020,98 @@ async function showTodo() {
   backendClient = new TodoBackendClient();
   backendClient.connect();
   
-  if (!ctx.extensionSettings[MODULE_NAME].todo) ctx.extensionSettings[MODULE_NAME].todo = [];
-  let todos = ctx.extensionSettings[MODULE_NAME].todo;
+  if (!ctx.extensionSettings[MODULE_NAME].todos) ctx.extensionSettings[MODULE_NAME].todos = [];
+  let todos = ctx.extensionSettings[MODULE_NAME].todos;
   
   todos.forEach(t => {
-    if (t.notifyScheduled === undefined) t.notifyScheduled = false;
+    // 确保有 id
     if (!t.id) t.id = 'todo_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    
+    // 基础字段（与后端 idle-backend.cjs 保持一致）
+    if (t.name === undefined) t.name = '';
+    if (t.due === undefined) t.due = '';
+    if (t.priority === undefined) t.priority = 3;
+    if (t.tag === undefined) t.tag = '';
+    if (t.done === undefined) t.done = false;
+    if (t.notifyScheduled === undefined) t.notifyScheduled = false;
+    if (t.focused === undefined) t.focused = 0;
+    
+    // 循环设置
+    if (t.recurrence === undefined) t.recurrence = null;
   });
   
-async function scheduleNotification(todo) {
-  if (!backendReady) {
-    if (typeof toastr !== 'undefined') toastr.error('后端未连接');
-    return false;
-  }
-  if (!todo.due) {
-    if (typeof toastr !== 'undefined') toastr.info('该待办无截止时间');
-    return false;
-  }
-  
-  // 🔥 关键：先设置 notifyScheduled = true
-  todo.notifyScheduled = true;
-  
-  let dueDateTime;
-  if (todo.due.includes('T')) {
-    dueDateTime = new Date(todo.due);
-  } else {
-    dueDateTime = new Date(todo.due + 'T08:00:00');
-  }
-  const now = new Date();
-  const delay = dueDateTime.getTime() - now.getTime();
-  if (delay <= 0) {
-    if (typeof toastr !== 'undefined') toastr.warning('截止时间已过');
-    todo.notifyScheduled = false;
-    return false;
-  }
-  
-  // 🔥 同步到后端
-  const success = await backendClient.syncTodos(todos);
-  if (success) {
-    const dateStr = dueDateTime.toLocaleString('zh-CN');
-    if (typeof toastr !== 'undefined') {
-      toastr.success(`已预约通知: ${dateStr}`, '🎯 通知已设置');
+  async function scheduleNotification(todo) {
+    if (!backendReady) {
+      if (typeof toastr !== 'undefined') toastr.error('后端未连接');
+      return false;
     }
-    debugLog('通知已调度:', todo.name, dateStr);
-    return true;
-  } else {
-    todo.notifyScheduled = false;
-    if (typeof toastr !== 'undefined') toastr.error('通知预约失败');
-    return false;
+    
+    // 🔥 循环任务和普通任务分开处理
+    if (todo.recurrence) {
+      // 循环任务：直接设置 notifyScheduled，后端会计算下次触发时间
+      todo.notifyScheduled = true;
+      
+      const success = await backendClient.syncTodos(todos);
+      if (success) {
+        let recurrenceText = '';
+        if (todo.recurrence.type === 'weekly') {
+          const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+          const dayNames = todo.recurrence.days.map(d => '周' + weekDays[d]).join(',');
+          recurrenceText = `每周${dayNames} ${todo.recurrence.time}`;
+        } else if (todo.recurrence.type === 'monthly') {
+          recurrenceText = `每月${todo.recurrence.date}号 ${todo.recurrence.time}`;
+        }
+        
+        if (typeof toastr !== 'undefined') {
+          toastr.success(`已预约循环通知: ${recurrenceText}`, '🎯 通知已设置');
+        }
+        debugLog('循环通知已调度:', todo.name, recurrenceText);
+        return true;
+      } else {
+        todo.notifyScheduled = false;
+        if (typeof toastr !== 'undefined') toastr.error('通知预约失败');
+        return false;
+      }
+    }
+    
+    // 普通任务：需要 due 时间
+    if (!todo.due) {
+      if (typeof toastr !== 'undefined') toastr.info('该待办无截止时间');
+      return false;
+    }
+    
+    // 🔥 关键：先设置 notifyScheduled = true
+    todo.notifyScheduled = true;
+    
+    let dueDateTime;
+    if (todo.due.includes('T')) {
+      dueDateTime = new Date(todo.due);
+    } else {
+      dueDateTime = new Date(todo.due + 'T08:00:00');
+    }
+    const now = new Date();
+    const delay = dueDateTime.getTime() - now.getTime();
+    if (delay <= 0) {
+      if (typeof toastr !== 'undefined') toastr.warning('截止时间已过');
+      todo.notifyScheduled = false;
+      return false;
+    }
+    
+    // 🔥 同步到后端
+    const success = await backendClient.syncTodos(todos);
+    if (success) {
+      const dateStr = dueDateTime.toLocaleString('zh-CN');
+      if (typeof toastr !== 'undefined') {
+        toastr.success(`已预约通知: ${dateStr}`, '🎯 通知已设置');
+      }
+      debugLog('通知已调度:', todo.name, dateStr);
+      return true;
+    } else {
+      todo.notifyScheduled = false;
+      if (typeof toastr !== 'undefined') toastr.error('通知预约失败');
+      return false;
+    }
   }
-}
   
   async function cancelNotification(todo) {
     if (!backendReady) return;
@@ -6650,7 +8152,18 @@ async function scheduleNotification(todo) {
         const due = t.due ? `截止:${t.due}` : '';
         const status = t.done ? '完成' : (t.due && new Date() > new Date(t.due) ? '过期' : '进行中');
         const notify = t.notifyScheduled ? '[🎯已预约]' : '';
-        return `${i+1}. [${status}] ${t.name} 优先:${t.priority} 标签:${t.tag} ${due} ${notify}`;
+        const focused = t.focused ? `已专注:${Math.floor(t.focused / 60)}分钟` : '';
+        let recurrence = '';
+        if (t.recurrence) {
+          if (t.recurrence.type === 'weekly') {
+            const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+            const dayNames = t.recurrence.days.map(d => '周' + weekDays[d]).join(',');
+            recurrence = `[🔁每周${dayNames} ${t.recurrence.time}]`;
+          } else if (t.recurrence.type === 'monthly') {
+            recurrence = `[🔁每月${t.recurrence.date}号 ${t.recurrence.time}]`;
+          }
+        }
+        return `${i+1}. [${status}] ${t.name} 优先:${t.priority} 标签:${t.tag} ${due} ${recurrence} ${focused} ${notify}`;
       });
       const newContent = arr.join('\n');
       await globalThis.SillyTavern.getContext()
@@ -6681,10 +8194,23 @@ async function scheduleNotification(todo) {
       const status = t.done ? '完成' : (t.due && new Date() > new Date(t.due) ? '过期' : '进行中');
       const dueText = t.due ? `截止:${t.due}` : '';
       const focusedTime = t.focused ? `已专注:${Math.floor(t.focused / 60)}分钟` : '';
+      
+      // 循环信息显示
+      let recurrenceText = '';
+      if (t.recurrence) {
+        if (t.recurrence.type === 'weekly') {
+          const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+          const dayNames = t.recurrence.days.map(d => '周' + weekDays[d]).join(',');
+          recurrenceText = `🔁每周${dayNames} ${t.recurrence.time}`;
+        } else if (t.recurrence.type === 'monthly') {
+          recurrenceText = `🔁每月${t.recurrence.date}号 ${t.recurrence.time}`;
+        }
+      }
+      
       const textSpan = document.createElement('span');
       textSpan.style.flex = '1';
       textSpan.style.wordBreak = 'break-word';
-      textSpan.innerText = `${i+1}. [${status}] ${t.name} 优先:${t.priority} 标签:${t.tag} ${dueText} ${focusedTime}`;
+      textSpan.innerText = `${i+1}. [${status}] ${t.name} 优先:${t.priority} 标签:${t.tag} ${dueText} ${focusedTime} ${recurrenceText}`;
       div.appendChild(textSpan);
       
       const btnNotify = document.createElement('button');
@@ -6751,15 +8277,59 @@ async function scheduleNotification(todo) {
   function openTodoDialog(t,sortMode) {
     const dialog = document.createElement('div');
     const isNew = !t;
-    const todo = t || {name:'',due:'',priority:3,tag:''};
+    const todo = t || {name:'',due:'',priority:3,tag:'',recurrence:null};
     const dueDate = todo.due ? (todo.due.split('T')[0]||'') : '';
     const dueTime = todo.due ? (todo.due.split('T')[1]||'') : '';
+    
+    // 循环设置初始值
+    const hasRecurrence = todo.recurrence !== null;
+    const recurrenceType = todo.recurrence ? todo.recurrence.type : 'weekly';
+    const recurrenceWeekDays = todo.recurrence && todo.recurrence.type === 'weekly' ? todo.recurrence.days : [];
+    const recurrenceMonthDate = todo.recurrence && todo.recurrence.type === 'monthly' ? todo.recurrence.date : 1;
+    const recurrenceTime = todo.recurrence ? todo.recurrence.time : '09:00';
+    
     dialog.innerHTML = `
-      <div style="background:#fff;padding:8px;border-radius:6px;box-shadow:0 1px 6px rgba(0,0,0,0.12);max-width:320px;margin:auto;">
+      <div style="background:#fff;padding:8px;border-radius:6px;box-shadow:0 1px 6px rgba(0,0,0,0.12);max-width:400px;margin:auto;">
         <div style="font-weight:600;margin-bottom:0px;">${isNew?'添加':'编辑'}待办</div>
         <label style="font-size:13px">名称:</label><br>
         <input id="todo-name" type="text" style="width:100%;margin-bottom:0px;padding:0px;" value="${escapeHtml(todo.name)}"><br>
-        <label style="font-size:13px">截止日期:</label><br>
+        
+        <div style="margin:8px 0;padding:8px;background:#f5f5f5;border-radius:4px;">
+          <label style="font-size:13px;font-weight:600;">
+            <input id="todo-recurrence-enable" type="checkbox" ${hasRecurrence?'checked':''}>
+            启用循环任务
+          </label>
+          <div id="recurrence-settings" style="margin-top:6px;display:${hasRecurrence?'block':'none'};">
+            <label style="font-size:12px">循环类型:</label>
+            <select id="recurrence-type" style="width:100%;margin-bottom:4px;padding:2px;">
+              <option value="weekly" ${recurrenceType==='weekly'?'selected':''}>按周循环</option>
+              <option value="monthly" ${recurrenceType==='monthly'?'selected':''}>按月循环</option>
+            </select>
+            
+            <div id="weekly-settings" style="display:${recurrenceType==='weekly'?'block':'none'};">
+              <label style="font-size:12px">选择星期 (可多选):</label><br>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0;">
+                <label style="font-size:11px;"><input type="checkbox" class="week-day" value="0" ${recurrenceWeekDays.includes(0)?'checked':''}>周日</label>
+                <label style="font-size:11px;"><input type="checkbox" class="week-day" value="1" ${recurrenceWeekDays.includes(1)?'checked':''}>周一</label>
+                <label style="font-size:11px;"><input type="checkbox" class="week-day" value="2" ${recurrenceWeekDays.includes(2)?'checked':''}>周二</label>
+                <label style="font-size:11px;"><input type="checkbox" class="week-day" value="3" ${recurrenceWeekDays.includes(3)?'checked':''}>周三</label>
+                <label style="font-size:11px;"><input type="checkbox" class="week-day" value="4" ${recurrenceWeekDays.includes(4)?'checked':''}>周四</label>
+                <label style="font-size:11px;"><input type="checkbox" class="week-day" value="5" ${recurrenceWeekDays.includes(5)?'checked':''}>周五</label>
+                <label style="font-size:11px;"><input type="checkbox" class="week-day" value="6" ${recurrenceWeekDays.includes(6)?'checked':''}>周六</label>
+              </div>
+            </div>
+            
+            <div id="monthly-settings" style="display:${recurrenceType==='monthly'?'block':'none'};">
+              <label style="font-size:12px">每月日期:</label>
+              <input id="month-date" type="number" min="1" max="31" value="${recurrenceMonthDate}" style="width:100%;margin-bottom:4px;padding:2px;">
+            </div>
+            
+            <label style="font-size:12px">时间:</label>
+            <input id="recurrence-time" type="time" value="${recurrenceTime}" style="width:100%;margin-bottom:4px;padding:2px;">
+          </div>
+        </div>
+        
+        <label style="font-size:13px">截止日期 (非循环任务):</label><br>
         <input id="todo-date" type="date" style="width:100%;margin-bottom:0px;padding:0px;"><br>
         <label style="font-size:13px">截止时间:</label><br>
         <input id="todo-time" type="time" style="width:100%;margin-bottom:0px;padding:0px;"><br>
@@ -6776,27 +8346,74 @@ async function scheduleNotification(todo) {
     content.appendChild(dialog);
     dialog.querySelector('#todo-date').value=dueDate;
     dialog.querySelector('#todo-time').value=dueTime;
+    
+    // 循环设置交互
+    const recurrenceEnableCheckbox = dialog.querySelector('#todo-recurrence-enable');
+    const recurrenceSettingsDiv = dialog.querySelector('#recurrence-settings');
+    const recurrenceTypeSelect = dialog.querySelector('#recurrence-type');
+    const weeklySettingsDiv = dialog.querySelector('#weekly-settings');
+    const monthlySettingsDiv = dialog.querySelector('#monthly-settings');
+    
+    recurrenceEnableCheckbox.onchange = () => {
+      recurrenceSettingsDiv.style.display = recurrenceEnableCheckbox.checked ? 'block' : 'none';
+    };
+    
+    recurrenceTypeSelect.onchange = () => {
+      const type = recurrenceTypeSelect.value;
+      weeklySettingsDiv.style.display = type === 'weekly' ? 'block' : 'none';
+      monthlySettingsDiv.style.display = type === 'monthly' ? 'block' : 'none';
+    };
+    
     dialog.querySelector('#todo-cancel').onclick=()=>dialog.remove();
     dialog.querySelector('#todo-ok').onclick= async ()=>{
       const name=dialog.querySelector('#todo-name').value.trim();
       if(!name)return alert('名称不能为空');
+      
       const date=dialog.querySelector('#todo-date').value;
       const time=dialog.querySelector('#todo-time').value;
       const due=date?(time?`${date}T${time}`:date):'';
       const priority=parseInt(dialog.querySelector('#todo-priority').value)||3;
       const tag=dialog.querySelector('#todo-tag').value.trim();
+      
+      // 处理循环设置
+      let recurrence = null;
+      if (recurrenceEnableCheckbox.checked) {
+        const type = recurrenceTypeSelect.value;
+        const recTime = dialog.querySelector('#recurrence-time').value;
+        
+        if (type === 'weekly') {
+          const selectedDays = Array.from(dialog.querySelectorAll('.week-day:checked'))
+            .map(cb => parseInt(cb.value));
+          if (selectedDays.length === 0) {
+            return alert('请至少选择一个星期');
+          }
+          recurrence = { type: 'weekly', days: selectedDays, time: recTime };
+        } else if (type === 'monthly') {
+          const monthDate = parseInt(dialog.querySelector('#month-date').value);
+          if (monthDate < 1 || monthDate > 31) {
+            return alert('日期必须在1-31之间');
+          }
+          recurrence = { type: 'monthly', date: monthDate, time: recTime };
+        }
+      }
+      
       if(isNew){
         const id='todo_'+Date.now()+'_'+Math.random().toString(36).substr(2,9);
-        todos.push({id,name,due,priority,tag,done:false,notifyScheduled:false});
+        todos.push({id,name,due,priority,tag,done:false,notifyScheduled:false,recurrence});
       }else{
         const oldDue = t.due;
+        const oldRecurrence = t.recurrence;
         t.name=name;
         t.due=due;
         t.priority=priority;
         t.tag=tag;
-        if (t.notifyScheduled && oldDue !== due) {
+        t.recurrence=recurrence;
+        
+        // 如果循环设置改变，需要重新调度通知
+        const recurrenceChanged = JSON.stringify(oldRecurrence) !== JSON.stringify(recurrence);
+        if (t.notifyScheduled && (oldDue !== due || recurrenceChanged)) {
           await cancelNotification(t);
-          if (due) {
+          if (due || recurrence) {
             const success = await scheduleNotification(t);
             t.notifyScheduled = success;
           } else {
@@ -7345,10 +8962,403 @@ async function showMemo() {
 
 
 
+/**
+ * 使用 TavernHelper 接口的 showReviews 函数
+ * 
+ * TavernHelper 接口访问方式：
+ * - 通过 window.TavernHelper 访问
+ * - 或者在插件中直接使用全局的 TavernHelper 对象
+ */
 
+async function showReviews() {
+  if (!ctx.extensionSettings[MODULE_NAME].reviews) ctx.extensionSettings[MODULE_NAME].reviews = [];
+  const reviews = ctx.extensionSettings[MODULE_NAME].reviews;
 
+  content.innerHTML = `
+    <div style="font-weight:600;margin-bottom:6px">生活测评</div>
+    <div style="margin-bottom:6px;">
+      <button id="ha-review-add" class="ha-btn" style="width:100%;margin-bottom:6px;">添加测评</button>
+      <button id="ha-review-manage" class="ha-btn" style="width:100%;">管理测评</button>
+    </div>
+    <div id="ha-review-list" style="margin-top:6px;"></div>
+  `;
 
+  const listEl = document.getElementById('ha-review-list');
 
+  function showToast(message, type = 'info') {
+    if (window.toastr) {
+      toastr[type](message, '生活测评', { timeOut: 3000 });
+    }
+    console.log('[健康生活助手][Reviews]', message);
+  }
+
+  function findReviewWorldFile() {
+    try {
+      const worldbookNames = TavernHelper.getWorldbookNames();
+      const reviewWorldbook = worldbookNames.find(name => name.includes('生活测评'));
+      
+      if (!reviewWorldbook) {
+        showToast('未找到名为 "生活测评" 的世界书文件', 'warning');
+        return null;
+      }
+      
+      return reviewWorldbook;
+    } catch (e) {
+      showToast('查找世界书文件失败: ' + (e.message || e), 'error');
+      return null;
+    }
+  }
+
+  async function updateWorldBookEntry(storeName, priceRange, rating) {
+    try {
+      const worldbookName = findReviewWorldFile();
+      if (!worldbookName) return;
+
+      const contentText = `店家名称: ${storeName}\n价格区间: ${priceRange}\n整体评价: ${rating}`;
+
+      // 使用 TavernHelper 获取并更新世界书
+      await TavernHelper.updateWorldbookWith(worldbookName, (worldbook) => {
+        // 查找是否已存在该店家的条目
+        const existingEntry = worldbook.find(entry => entry.name === storeName);
+        
+        if (existingEntry) {
+          // 更新现有条目
+          existingEntry.content = contentText;
+          console.log('[健康生活助手][Reviews] 更新已存在的条目, name=', storeName);
+          showToast('世界书条目已更新', 'success');
+        } else {
+          // 创建新条目
+          worldbook.push({
+            name: storeName,
+            content: contentText,
+            enabled: true,
+            strategy: {
+              type: 'selective',
+              keys: [storeName],
+              keys_secondary: { logic: 'and_any', keys: [] },
+              scan_depth: 'same_as_global'
+            },
+            position: {
+              type: 'after_character_definition',
+              role: 'system',
+              depth: 4,
+              order: 105
+            },
+            probability: 100,
+            recursion: {
+              prevent_incoming: false,
+              prevent_outgoing: false,
+              delay_until: null
+            },
+            effect: {
+              sticky: null,
+              cooldown: null,
+              delay: null
+            }
+          });
+          console.log('[健康生活助手][Reviews] 创建新条目, storeName=', storeName);
+          showToast('世界书条目已创建', 'success');
+        }
+        
+        return worldbook;
+      });
+    } catch (e) {
+      showToast('写入世界书失败: ' + (e.message || e), 'error');
+      console.error('[健康生活助手][Reviews] 错误详情:', e);
+    }
+  }
+
+  async function deleteWorldBookEntry(storeName) {
+    try {
+      const worldbookName = findReviewWorldFile();
+      if (!worldbookName) return;
+
+      // 使用 TavernHelper 删除世界书条目
+      const { deleted_entries } = await TavernHelper.deleteWorldbookEntries(
+        worldbookName,
+        entry => entry.name === storeName
+      );
+
+      if (deleted_entries.length > 0) {
+        console.log('[健康生活助手][Reviews] 删除条目成功, storeName=', storeName);
+        showToast('世界书条目已删除', 'success');
+      } else {
+        console.log('[健康生活助手][Reviews] 未找到要删除的条目, storeName=', storeName);
+      }
+    } catch (e) {
+      showToast('删除世界书条目失败: ' + (e.message || e), 'error');
+      console.error('[健康生活助手][Reviews] 删除错误详情:', e);
+    }
+  }
+
+  function openAddDialog() {
+    const dialog = document.createElement('div');
+    dialog.style.position = 'absolute';
+    dialog.style.top = '0';
+    dialog.style.left = '0';
+    dialog.style.width = '100%';
+    dialog.style.height = '100%';
+    dialog.style.background = 'rgba(0,0,0,0.5)';
+    dialog.style.display = 'flex';
+    dialog.style.alignItems = 'center';
+    dialog.style.justifyContent = 'center';
+    dialog.style.zIndex = '10000';
+
+    const innerPanel = document.createElement('div');
+    innerPanel.style.background = '#fff';
+    innerPanel.style.padding = '20px';
+    innerPanel.style.borderRadius = '8px';
+    innerPanel.style.maxWidth = '400px';
+    innerPanel.style.width = '90%';
+    innerPanel.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+
+    innerPanel.innerHTML = `
+      <div style="font-weight:600;margin-bottom:16px;">添加测评</div>
+      <div style="margin-bottom:12px;">
+        <label style="display:block;margin-bottom:4px;font-size:13px;">店家名称 <span style="color:red;">*</span>:</label>
+        <input type="text" id="review-store-name" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;">
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="display:block;margin-bottom:4px;font-size:13px;">价格区间:</label>
+        <input type="text" id="review-price-range" placeholder="例如: 50-100元" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;">
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="display:block;margin-bottom:4px;font-size:13px;">整体评价:</label>
+        <textarea id="review-rating" placeholder="填写您的评价..." style="width:100%;min-height:80px;padding:6px;border:1px solid #ccc;border-radius:4px;resize:vertical;"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button id="review-save" class="ha-btn" style="flex:1;background:#4CAF50;color:#fff;">保存</button>
+        <button id="review-cancel" class="ha-btn" style="flex:1;">取消</button>
+      </div>
+    `;
+
+    dialog.appendChild(innerPanel);
+    content.appendChild(dialog);
+
+    innerPanel.querySelector('#review-save').addEventListener('click', async () => {
+      const storeName = innerPanel.querySelector('#review-store-name').value.trim();
+      const priceRange = innerPanel.querySelector('#review-price-range').value.trim();
+      const rating = innerPanel.querySelector('#review-rating').value.trim();
+
+      if (!storeName) {
+        showToast('请填写店家名称', 'warning');
+        return;
+      }
+
+      const existingIndex = reviews.findIndex(r => r.storeName === storeName);
+      if (existingIndex >= 0) {
+        reviews[existingIndex].priceRange = priceRange;
+        reviews[existingIndex].rating = rating;
+      } else {
+        reviews.push({ storeName, priceRange, rating });
+      }
+
+      saveSettings();
+      await updateWorldBookEntry(storeName, priceRange, rating);
+      showToast('测评已保存', 'success');
+      dialog.remove();
+      renderList();
+    });
+
+    innerPanel.querySelector('#review-cancel').onclick = () => dialog.remove();
+  }
+
+  function openManageDialog() {
+    const dialog = document.createElement('div');
+    dialog.style.position = 'absolute';
+    dialog.style.top = '0';
+    dialog.style.left = '0';
+    dialog.style.width = '100%';
+    dialog.style.height = '100%';
+    dialog.style.background = 'rgba(0,0,0,0.5)';
+    dialog.style.display = 'flex';
+    dialog.style.alignItems = 'center';
+    dialog.style.justifyContent = 'center';
+    dialog.style.zIndex = '10000';
+
+    const innerPanel = document.createElement('div');
+    innerPanel.style.background = '#fff';
+    innerPanel.style.padding = '20px';
+    innerPanel.style.borderRadius = '8px';
+    innerPanel.style.maxWidth = '500px';
+    innerPanel.style.width = '90%';
+    innerPanel.style.maxHeight = '80vh';
+    innerPanel.style.overflow = 'auto';
+    innerPanel.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+
+    innerPanel.innerHTML = `
+      <div style="font-weight:600;margin-bottom:16px;">管理测评</div>
+      <div id="review-manage-list"></div>
+      <div style="margin-top:16px;">
+        <button id="review-manage-close" class="ha-btn" style="width:100%;">关闭</button>
+      </div>
+    `;
+
+    const manageListEl = innerPanel.querySelector('#review-manage-list');
+    
+    function renderManageList() {
+      manageListEl.innerHTML = '';
+      if (reviews.length === 0) {
+        manageListEl.innerHTML = '<div style="color:#999;text-align:center;padding:20px;">暂无测评记录</div>';
+        return;
+      }
+
+      reviews.forEach((review, index) => {
+        const div = document.createElement('div');
+        div.style.marginBottom = '12px';
+        div.style.padding = '12px';
+        div.style.border = '1px solid #e0e0e0';
+        div.style.borderRadius = '6px';
+        div.style.background = '#f9f9f9';
+
+        div.innerHTML = `
+          <div style="font-weight:600;margin-bottom:6px;">${review.storeName}</div>
+          <div style="font-size:12px;color:#666;margin-bottom:4px;">价格: ${review.priceRange || '未填写'}</div>
+          <div style="font-size:12px;color:#666;margin-bottom:8px;">评价: ${review.rating || '未填写'}</div>
+          <div style="display:flex;gap:6px;">
+            <button class="review-edit ha-btn" data-index="${index}" style="flex:1;">编辑</button>
+            <button class="review-delete ha-btn" data-index="${index}" style="flex:1;background:#f44336;color:#fff;">删除</button>
+          </div>
+        `;
+
+        manageListEl.appendChild(div);
+      });
+
+      manageListEl.querySelectorAll('.review-edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const index = parseInt(btn.dataset.index);
+          const review = reviews[index];
+          dialog.remove();
+          openEditDialog(review, index);
+        });
+      });
+
+      manageListEl.querySelectorAll('.review-delete').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('确认删除该测评?')) return;
+          const index = parseInt(btn.dataset.index);
+          const review = reviews[index];
+          await deleteWorldBookEntry(review.storeName);
+          reviews.splice(index, 1);
+          saveSettings();
+          showToast('测评已删除', 'info');
+          renderManageList();
+          renderList();
+        });
+      });
+    }
+
+    dialog.appendChild(innerPanel);
+    content.appendChild(dialog);
+
+    renderManageList();
+    innerPanel.querySelector('#review-manage-close').onclick = () => dialog.remove();
+  }
+
+  function openEditDialog(review, index) {
+    const dialog = document.createElement('div');
+    dialog.style.position = 'absolute';
+    dialog.style.top = '0';
+    dialog.style.left = '0';
+    dialog.style.width = '100%';
+    dialog.style.height = '100%';
+    dialog.style.background = 'rgba(0,0,0,0.5)';
+    dialog.style.display = 'flex';
+    dialog.style.alignItems = 'center';
+    dialog.style.justifyContent = 'center';
+    dialog.style.zIndex = '10000';
+
+    const innerPanel = document.createElement('div');
+    innerPanel.style.background = '#fff';
+    innerPanel.style.padding = '20px';
+    innerPanel.style.borderRadius = '8px';
+    innerPanel.style.maxWidth = '400px';
+    innerPanel.style.width = '90%';
+    innerPanel.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+
+    innerPanel.innerHTML = `
+      <div style="font-weight:600;margin-bottom:16px;">编辑测评</div>
+      <div style="margin-bottom:12px;">
+        <label style="display:block;margin-bottom:4px;font-size:13px;">店家名称 <span style="color:red;">*</span>:</label>
+        <input type="text" id="review-edit-store-name" value="${review.storeName}" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;">
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="display:block;margin-bottom:4px;font-size:13px;">价格区间:</label>
+        <input type="text" id="review-edit-price-range" value="${review.priceRange || ''}" placeholder="例如: 50-100元" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;">
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="display:block;margin-bottom:4px;font-size:13px;">整体评价:</label>
+        <textarea id="review-edit-rating" placeholder="填写您的评价..." style="width:100%;min-height:80px;padding:6px;border:1px solid #ccc;border-radius:4px;resize:vertical;">${review.rating || ''}</textarea>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button id="review-edit-save" class="ha-btn" style="flex:1;background:#4CAF50;color:#fff;">保存</button>
+        <button id="review-edit-cancel" class="ha-btn" style="flex:1;">取消</button>
+      </div>
+    `;
+
+    dialog.appendChild(innerPanel);
+    content.appendChild(dialog);
+
+    innerPanel.querySelector('#review-edit-save').addEventListener('click', async () => {
+      const oldStoreName = review.storeName;
+      const newStoreName = innerPanel.querySelector('#review-edit-store-name').value.trim();
+      const priceRange = innerPanel.querySelector('#review-edit-price-range').value.trim();
+      const rating = innerPanel.querySelector('#review-edit-rating').value.trim();
+
+      if (!newStoreName) {
+        showToast('请填写店家名称', 'warning');
+        return;
+      }
+
+      if (oldStoreName !== newStoreName) {
+        await deleteWorldBookEntry(oldStoreName);
+      }
+
+      reviews[index] = { storeName: newStoreName, priceRange, rating };
+      saveSettings();
+      await updateWorldBookEntry(newStoreName, priceRange, rating);
+      showToast('测评已更新', 'success');
+      dialog.remove();
+      renderList();
+      openManageDialog();
+    });
+
+    innerPanel.querySelector('#review-edit-cancel').onclick = () => {
+      dialog.remove();
+      openManageDialog();
+    };
+  }
+
+  function renderList() {
+    listEl.innerHTML = '';
+    if (reviews.length === 0) {
+      listEl.innerHTML = '<div style="color:#999;text-align:center;padding:20px;">暂无测评记录,点击"添加测评"开始</div>';
+      return;
+    }
+
+    reviews.forEach((review, index) => {
+      const div = document.createElement('div');
+      div.style.marginBottom = '8px';
+      div.style.padding = '8px';
+      div.style.border = '1px solid #e0e0e0';
+      div.style.borderRadius = '4px';
+      div.style.background = '#fafafa';
+
+      div.innerHTML = `
+        <div style="font-weight:600;">${index + 1}. ${review.storeName}</div>
+        <div style="font-size:12px;color:#666;margin-top:2px;">价格: ${review.priceRange || '未填写'}</div>
+        <div style="font-size:12px;color:#666;">评价: ${review.rating || '未填写'}</div>
+      `;
+
+      listEl.appendChild(div);
+    });
+  }
+
+  document.getElementById('ha-review-add').addEventListener('click', openAddDialog);
+  document.getElementById('ha-review-manage').addEventListener('click', openManageDialog);
+
+  renderList();
+}
 
 
 
@@ -7370,11 +9380,12 @@ async function showBgm() {
   container.innerHTML = `
     <div style="font-weight:600;margin-bottom:6px">🎵 背景音乐</div>
 
-    <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px">
-      <input id="ha-bgm-tag-input" type="text" placeholder="标签名" style="flex:1;padding:4px;border:1px solid #ccc;border-radius:4px;">
-      <button id="ha-bgm-add" class="ha-btn">➕</button>
-      <button id="ha-bgm-del" class="ha-btn">🗑️</button>
-      <button id="ha-bgm-star" class="ha-btn">⭐</button>
+    <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;width:100%;">
+      <input id="ha-bgm-tag-input" type="text" placeholder="标签名" style="flex:1;min-width:0;padding:4px;border:1px solid #ccc;border-radius:4px;">
+      <button id="ha-bgm-add" class="ha-btn" style="flex-shrink:0;">➕</button>
+      <button id="ha-bgm-del" class="ha-btn" style="flex-shrink:0;">🗑️</button>
+      <button id="ha-bgm-star" class="ha-btn" style="flex-shrink:0;">⭐</button>
+      <button id="ha-bgm-together" class="ha-btn" style="flex-shrink:0;">🎧</button>
     </div>
 
     <div id="ha-bgm-tags" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;"></div>
@@ -7394,6 +9405,7 @@ async function showBgm() {
   const addBtn = document.getElementById('ha-bgm-add');
   const delBtn = document.getElementById('ha-bgm-del');
   const starBtn = document.getElementById('ha-bgm-star');
+  const togetherBtn = document.getElementById('ha-bgm-together');
   const searchBtn = document.getElementById('ha-bgm-query');
   const searchInput = document.getElementById('ha-bgm-search');
   const limitInput = document.getElementById('ha-bgm-limit');
@@ -7537,6 +9549,108 @@ async function showBgm() {
   let Float_Bar_Active = false;
   let Current_Playing_Song = null;
   let Is_Currently_Playing = false;
+  
+  // 🎧 一起听歌状态
+  let Listen_Together_Mode = false;
+
+  // ==================== 一起听歌功能 ====================
+  
+  // 更新"一起听歌"按钮状态
+  function updateTogetherBtnState() {
+    if (togetherBtn) {
+      togetherBtn.style.background = Listen_Together_Mode ? '#4CAF50' : '';
+      togetherBtn.style.color = Listen_Together_Mode ? '#fff' : '';
+      togetherBtn.title = Listen_Together_Mode ? '一起听歌模式已开启' : '点击开启一起听歌';
+    }
+  }
+  
+  // 同步当前播放歌曲到世界书
+  async function syncListenTogetherEntry(name, artist) {
+    if (!Listen_Together_Mode) return;
+    
+    try {
+      const fileId = await findHealthWorldFile();
+      if (!fileId) {
+        debug('[一起听歌] 未找到健康生活助手世界书');
+        return;
+      }
+      
+      const moduleWI = await import('/scripts/world-info.js');
+      const worldInfo = await moduleWI.loadWorldInfo(fileId);
+      const entries = worldInfo.entries || {};
+      
+      let targetUID = null;
+      for (const id in entries) {
+        const entry = entries[id];
+        if (!entry.disable && (entry.title === '一起听歌' || (entry.comment || '').includes('一起听歌'))) {
+          targetUID = entry.uid;
+          break;
+        }
+      }
+      
+      if (!targetUID) {
+        debug('[一起听歌] 未找到"一起听歌"条目');
+        toaster('未找到"一起听歌"世界书条目', 'warning');
+        return;
+      }
+      
+      const songLine = `正在与{{user}}一起听:${name} - ${artist}`;
+      await ctx.SlashCommandParser.commands['setentryfield']
+        .callback({ file: fileId, uid: targetUID, field: 'content' }, songLine);
+      
+      debug(`[一起听歌] 已同步: ${name} - ${artist}`);
+    } catch (e) {
+      debug('[一起听歌] 同步失败', e);
+    }
+  }
+  
+  // 清除世界书中的一起听歌条目
+  async function clearListenTogetherEntry() {
+    try {
+      const fileId = await findHealthWorldFile();
+      if (!fileId) return;
+      
+      const moduleWI = await import('/scripts/world-info.js');
+      const worldInfo = await moduleWI.loadWorldInfo(fileId);
+      const entries = worldInfo.entries || {};
+      
+      let targetUID = null;
+      for (const id in entries) {
+        const entry = entries[id];
+        if (!entry.disable && (entry.title === '一起听歌' || (entry.comment || '').includes('一起听歌'))) {
+          targetUID = entry.uid;
+          break;
+        }
+      }
+      
+      if (!targetUID) return;
+      
+      await ctx.SlashCommandParser.commands['setentryfield']
+        .callback({ file: fileId, uid: targetUID, field: 'content' }, '');
+      
+      debug('[一起听歌] 已清除条目');
+    } catch (e) {
+      debug('[一起听歌] 清除失败', e);
+    }
+  }
+  
+  // 一起听歌按钮点击事件
+  togetherBtn.onclick = async () => {
+    Listen_Together_Mode = !Listen_Together_Mode;
+    updateTogetherBtnState();
+    
+    if (Listen_Together_Mode) {
+      toaster('🎧 一起听歌模式已开启', 'success');
+      // 如果当前有播放歌曲，立即同步
+      if (Current_Playing_Song && !Music_Audio.paused) {
+        await syncListenTogetherEntry(Current_Playing_Song.name, Current_Playing_Song.artist);
+      }
+    } else {
+      toaster('一起听歌模式已关闭', 'info');
+      // 关闭时清除条目
+      await clearListenTogetherEntry();
+    }
+  };
 
   // ==================== 悬浮栏功能 ====================
 
@@ -7888,9 +10002,13 @@ async function showBgm() {
       </div>`;
     document.body.appendChild(popup);
 
-    document.getElementById('ha-music-close').onclick = () => {
+    document.getElementById('ha-music-close').onclick = async () => {
       popup.remove();
       removeFloatBar();
+      // 🎧 关闭播放器时清除一起听歌条目
+      if (Listen_Together_Mode) {
+        await clearListenTogetherEntry();
+      }
     };
 
     document.getElementById('ha-music-float').onclick = () => {
@@ -7959,16 +10077,24 @@ async function showBgm() {
     if (modeBtn) modeBtn.textContent = label;
   }
 
-  function togglePlay() {
+  async function togglePlay() {
     const playBtn = document.getElementById('ha-play');
     if (Music_Audio.paused) {
       Music_Audio.play();
       if (playBtn) playBtn.textContent = '⏸️';
       Is_Currently_Playing = true;
+      // 🎧 恢复播放时同步一起听歌
+      if (Listen_Together_Mode && Current_Playing_Song) {
+        await syncListenTogetherEntry(Current_Playing_Song.name, Current_Playing_Song.artist);
+      }
     } else {
       Music_Audio.pause();
       if (playBtn) playBtn.textContent = '▶️';
       Is_Currently_Playing = false;
+      // 🎧 暂停时清除一起听歌条目
+      if (Listen_Together_Mode) {
+        await clearListenTogetherEntry();
+      }
     }
   }
 
@@ -8039,6 +10165,11 @@ async function showBgm() {
       Music_Audio.ontimeupdate = updateLyrics;
       
       toaster(`🎵 ${name} - ${artist}`, 'success');
+      
+      // 🎧 同步一起听歌
+      if (Listen_Together_Mode) {
+        await syncListenTogetherEntry(name, artist);
+      }
       
     } catch (error) {
       debug('[后台播放] 异常:', error);
@@ -8123,6 +10254,11 @@ async function showBgm() {
       Music_Audio.ontimeupdate = updateLyrics;
       
       toaster(`🎵 ${name} - ${artist}`, 'success');
+      
+      // 🎧 同步一起听歌
+      if (Listen_Together_Mode) {
+        await syncListenTogetherEntry(name, artist);
+      }
       
     } catch (error) {
       debug('[播放] 异常:', error);
@@ -8471,6 +10607,7 @@ async function showBgm() {
     }
   }
 }
+
 
 
 
@@ -9566,6 +11703,7 @@ checkAndPerformDietAutoClean();
 checkAndPerformExerciseAutoClean();
 checkAndPerformMentalAutoClean();
 checkAndPerformMemoAutoClean();
+checkAndPerformFinanceAutoClean();  // 添加财务定期清除检查
 // 延迟执行清除(确保所有模块初始化完成)
 setTimeout(() => {
   performAllAutoClean();
@@ -9577,7 +11715,9 @@ setInterval(() => {
   checkAndPerformExerciseAutoClean();
   checkAndPerformMentalAutoClean();
   checkAndPerformMemoAutoClean();
+  checkAndPerformFinanceAutoClean();  // 添加财务定期清除检查
 }, 60 * 60 * 1000);
+
 
      
 
